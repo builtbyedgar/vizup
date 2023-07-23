@@ -27,7 +27,7 @@ function drawText({ context, text, point, align = 'center', verticalAlign = 'mid
 
 const CIRCLE = Math.PI * 2;
 const OPTIONS = {
-    margin: { top: 8, left: 8, bottom: 8, right: 8 },
+    margin: { top: 20, left: 20, bottom: 20, right: 20 },
     axisX: {
         label: 'data',
     },
@@ -35,6 +35,9 @@ const OPTIONS = {
         label: 'value',
     },
 };
+/**
+ * https://www.youtube.com/watch?v=n8uCt1TSGKE&t=4743s
+ */
 class Chart {
     constructor(container, data, options = OPTIONS) {
         this.container = container;
@@ -53,8 +56,9 @@ class Chart {
         this.canvas.height = box.height * scale;
         this.canvasSize = {
             width: box.width,
-            height: box.height
+            height: box.height,
         };
+        console.log(box);
         this.context.scale(scale, scale);
         this.container.appendChild(this.canvas);
         this.dataBounds = this.getDataBounds();
@@ -86,10 +90,10 @@ class Chart {
         return bounds;
     }
     draw() {
-        const { canvas, context } = this;
+        const { canvasSize, context } = this;
         // Limpiamos el canvas
         this.context.globalAlpha = 0.5;
-        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.clearRect(0, 0, canvasSize.width, canvasSize.height);
         this.context.globalAlpha = 1;
         this.drawData();
         this.drawAxes();
@@ -97,10 +101,15 @@ class Chart {
     drawData() {
         const { context, data, dataBounds, pixelBounds } = this;
         for (const item of data) {
-            /** @todo esto se puede sacar a una función */
+            /**
+             * @todo esto se puede sacar a una función
+             *
+             * @note como vemos le sumamos/restamos la mitad del tamaño de los circulos para que
+             * queden dentro. Esto hay que pensarlo bien
+             **/
             const point = {
-                x: remap(dataBounds.left, dataBounds.right, pixelBounds.left, pixelBounds.right, item.date),
-                y: remap(dataBounds.top, dataBounds.bottom, pixelBounds.top, pixelBounds.bottom, item.value),
+                x: remap(dataBounds.left, dataBounds.right, pixelBounds.left + 4, pixelBounds.right - 4, item.date),
+                y: remap(dataBounds.top, dataBounds.bottom, pixelBounds.top + 4, pixelBounds.bottom - 4, item.value),
             };
             this.drawPoint(context, point, 'rgba(62, 166, 255, 0.75)');
         }
@@ -121,9 +130,30 @@ class Chart {
     drawAxes() {
         const position = {
             x: this.canvasSize.width / 2,
-            y: this.pixelBounds.bottom,
+            y: this.pixelBounds.bottom + 12,
         };
-        drawText({ context: this.context, text: 'Value', point: position, size: 14 });
+        this.context.save();
+        drawText({
+            context: this.context,
+            text: 'Value',
+            point: position,
+            size: 12,
+        });
+        this.context.restore();
+        // Draw the axis X line
+        this.context.beginPath();
+        this.context.moveTo(this.pixelBounds.left, this.pixelBounds.bottom);
+        this.context.lineTo(this.pixelBounds.right, this.pixelBounds.bottom);
+        this.context.lineWidth = 1;
+        this.context.strokeStyle = 'lightgrey';
+        this.context.stroke();
+        // Draw the axis Y line
+        this.context.beginPath();
+        this.context.moveTo(this.pixelBounds.top, this.pixelBounds.left);
+        this.context.lineTo(this.pixelBounds.left, this.pixelBounds.bottom);
+        this.context.lineWidth = 1;
+        this.context.strokeStyle = 'lightgrey';
+        this.context.stroke();
     }
 }
 
