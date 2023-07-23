@@ -1,9 +1,8 @@
-import { remap } from '../math/math'
+import { drawText, remap } from '../utils/utils'
 
 const CIRCLE = Math.PI * 2
 
 const OPTIONS: ChartOptions = {
-  size: 250,
   margin: { top: 8, left: 8, bottom: 8, right: 8 },
   axisX: {
     label: 'data',
@@ -19,6 +18,7 @@ export default class Chart {
   canvas: HTMLCanvasElement
   context: CanvasRenderingContext2D
   options: ChartOptions
+  canvasSize: Size
 
   dataBounds: Bounds
   pixelBounds: Bounds
@@ -37,12 +37,22 @@ export default class Chart {
 
   init() {
     const box = this.container.getBoundingClientRect()
+    const scale = window.devicePixelRatio || 1
 
     this.canvas = document.createElement('canvas')
-    this.canvas.width = box.width
-    this.canvas.height = box.height
-
     this.context = this.canvas.getContext('2d')
+
+    this.canvas.style.width = box.width + 'px'
+    this.canvas.style.height = box.height + 'px'
+
+    this.canvas.width = box.width * scale
+    this.canvas.height = box.height * scale
+    this.canvasSize = {
+      width: box.width,
+      height: box.height
+    }
+
+    this.context.scale(scale, scale)
 
     this.container.appendChild(this.canvas)
 
@@ -55,8 +65,8 @@ export default class Chart {
   getPixelBounds(): Bounds {
     const bounds: Bounds = {
       top: this.options.margin.top,
-      right: this.canvas.width - this.options.margin.right,
-      bottom: this.canvas.height - this.options.margin.bottom,
+      right: this.canvasSize.width - this.options.margin.right,
+      bottom: this.canvasSize.height - this.options.margin.bottom,
       left: this.options.margin.left,
     }
 
@@ -89,12 +99,14 @@ export default class Chart {
     this.context.globalAlpha = 1
 
     this.drawData()
+    this.drawAxes()
   }
 
   drawData(): void {
     const { context, data, dataBounds, pixelBounds } = this
 
     for (const item of data) {
+      /** @todo esto se puede sacar a una función */
       const point: Point = {
         x: remap(
           dataBounds.left,
@@ -127,13 +139,19 @@ export default class Chart {
     color: string = 'black',
     size: number = 6
   ): void {
-    console.log(point.x);
-    
     context.beginPath()
     context.fillStyle = color
     context.strokeStyle = '1px solid black'
     context.arc(point.x, point.y, size / 2, 0, CIRCLE)
     context.fill()
     context.stroke()
+  }
+
+  drawAxes() {
+    const position: Point = {
+      x: this.canvasSize.width / 2,
+      y: this.pixelBounds.bottom,
+    }
+    drawText({ context: this.context, text: 'Value', point: position, size: 14 })
   }
 }

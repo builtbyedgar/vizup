@@ -7,6 +7,11 @@ type Point = {
   y: number
 }
 
+type Size = {
+  width: number
+  height: number
+}
+
 type Bounds = {
   top: number
   right: number
@@ -15,7 +20,6 @@ type Bounds = {
 }
 
 type ChartOptions = {
-  size?: number
   margin?: Bounds
   axisX?: any
   axisY?: any
