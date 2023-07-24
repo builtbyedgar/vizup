@@ -11,3 +11,4 @@ import data from './data'
 const container = document.querySelector('#chart') as HTMLElement;
 const chart = new Chart(container, data)
 
+window.addEventListener('resize', () => chart.resize(), false)

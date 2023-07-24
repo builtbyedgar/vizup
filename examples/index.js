@@ -27,7 +27,7 @@ function drawText({ context, text, point, align = 'center', verticalAlign = 'mid
 
 const CIRCLE = Math.PI * 2;
 const OPTIONS = {
-    margin: { top: 20, left: 20, bottom: 20, right: 20 },
+    margin: { top: 20, left: 40, bottom: 20, right: 40 },
     axisX: {
         label: 'data',
     },
@@ -48,8 +48,8 @@ class Chart {
     init() {
         const box = this.container.getBoundingClientRect();
         const scale = window.devicePixelRatio || 1;
-        this.canvas = document.createElement('canvas');
-        this.context = this.canvas.getContext('2d');
+        this.canvas = this.canvas || document.createElement('canvas');
+        this.context = this.context || this.canvas.getContext('2d');
         this.canvas.style.width = box.width + 'px';
         this.canvas.style.height = box.height + 'px';
         this.canvas.width = box.width * scale;
@@ -58,12 +58,15 @@ class Chart {
             width: box.width,
             height: box.height,
         };
-        console.log(box);
         this.context.scale(scale, scale);
         this.container.appendChild(this.canvas);
         this.dataBounds = this.getDataBounds();
         this.pixelBounds = this.getPixelBounds();
         this.draw();
+    }
+    resize() {
+        console.log('RESIZE');
+        this.init();
     }
     getPixelBounds() {
         const bounds = {
@@ -81,6 +84,7 @@ class Chart {
         const maxX = Math.max(...x);
         const minY = Math.min(...y);
         const maxY = Math.max(...y);
+        this.dataRange = { min: minY, max: maxY };
         const bounds = {
             top: maxY,
             right: maxX,
@@ -97,9 +101,14 @@ class Chart {
         this.context.globalAlpha = 1;
         this.drawData();
         this.drawAxes();
+        this.drawThresholdLine(0, 'green');
+        this.drawThresholdLine(1, 'orange');
+        this.drawThresholdLine(-0.5, 'red');
     }
     drawData() {
-        const { context, data, dataBounds, pixelBounds } = this;
+        const { context, data, dataBounds, pixelBounds, dataRange } = this;
+        const { min, max } = dataRange;
+        const range = (min - max) * -1;
         for (const item of data) {
             /**
              * @todo esto se puede sacar a una función
@@ -111,7 +120,9 @@ class Chart {
                 x: remap(dataBounds.left, dataBounds.right, pixelBounds.left + 4, pixelBounds.right - 4, item.date),
                 y: remap(dataBounds.top, dataBounds.bottom, pixelBounds.top + 4, pixelBounds.bottom - 4, item.value),
             };
-            this.drawPoint(context, point, 'rgba(62, 166, 255, 0.75)');
+            const opacity = (item.value - min) / range;
+            const normalize = Math.max(0.1, Math.min(1, opacity));
+            this.drawPoint(context, point, `rgba(62, 166, 255, ${normalize})`);
         }
     }
     /**
@@ -122,11 +133,14 @@ class Chart {
     drawPoint(context, point, color = 'black', size = 6) {
         context.beginPath();
         context.fillStyle = color;
-        context.strokeStyle = '1px solid black';
+        context.strokeStyle = 'rgba(0, 0, 0, 0.4)';
         context.arc(point.x, point.y, size / 2, 0, CIRCLE);
         context.fill();
         context.stroke();
     }
+    /**
+     *
+     */
     drawAxes() {
         const position = {
             x: this.canvasSize.width / 2,
@@ -148,11 +162,24 @@ class Chart {
         this.context.strokeStyle = 'lightgrey';
         this.context.stroke();
         // Draw the axis Y line
+        // this.context.beginPath()
+        // this.context.moveTo(this.pixelBounds.left, this.pixelBounds.top)
+        // this.context.lineTo(this.pixelBounds.left, this.pixelBounds.bottom)
+        // this.context.lineWidth = 1
+        // this.context.strokeStyle = 'lightgrey'
+        // this.context.stroke()
+    }
+    drawThresholdLine(value = 0, color = 'darkgrey') {
+        const height = this.pixelBounds.bottom - this.pixelBounds.top;
+        const range = (this.dataRange.min - this.dataRange.max) * -1;
+        const escalaY = height / range;
+        const zero = this.dataBounds.top + height - ((value - this.dataRange.min) * escalaY);
+        // Draw the axis X line
         this.context.beginPath();
-        this.context.moveTo(this.pixelBounds.top, this.pixelBounds.left);
-        this.context.lineTo(this.pixelBounds.left, this.pixelBounds.bottom);
+        this.context.moveTo(this.pixelBounds.left, zero);
+        this.context.lineTo(this.pixelBounds.right, zero);
         this.context.lineWidth = 1;
-        this.context.strokeStyle = 'lightgrey';
+        this.context.strokeStyle = color;
         this.context.stroke();
     }
 }
@@ -6748,4 +6775,5 @@ const data = [
 // console.table(data);
 const container = document.querySelector('#chart');
 const chart = new Chart(container, src_data);
+window.addEventListener('resize', () => chart.resize(), false);
 

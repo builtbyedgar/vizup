@@ -24,3 +24,22 @@ type ChartOptions = {
   axisX?: any
   axisY?: any
 }
+
+type DataRange = {
+  min: number, 
+  max: number
+}
+
+/**
+ * Methods
+ */
+
+type DrawTextArgs = {
+  context: CanvasRenderingContext2D
+  text: string
+  point: Point
+  align?: CanvasTextAlign
+  verticalAlign?: CanvasTextBaseline
+  size?: number
+  color?: string
+}

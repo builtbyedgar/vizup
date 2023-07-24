@@ -18,15 +18,7 @@ export function drawText({
   verticalAlign = 'middle',
   size = 10,
   color = 'black',
-}: {
-  context: CanvasRenderingContext2D
-  text: string
-  point: Point
-  align?: CanvasTextAlign
-  verticalAlign?: CanvasTextBaseline
-  size?: number
-  color?: string
-}): void {
+}: DrawTextArgs): void {
   context.textAlign = align
   context.textBaseline = verticalAlign
   context.font = `${size}px SF Pro`
