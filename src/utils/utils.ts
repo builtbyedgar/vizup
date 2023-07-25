@@ -97,3 +97,16 @@ export function getNearestIndex(location: Point, points: any[]): number {
 
   return index
 }
+
+export function encoder<T>(obj: T, encode: Encode): T {
+  const newObjb = { ...obj }
+
+  for (const key in encode) {
+    const fn = encode[key]
+    const value = typeof fn === 'function' ? fn(obj) : obj[fn]
+    newObjb[key] = value
+  }
+
+
+  return { ...newObjb }
+}

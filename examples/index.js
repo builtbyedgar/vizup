@@ -63,6 +63,15 @@ function getNearestIndex(location, points) {
     }
     return index;
 }
+function encoder(obj, encode) {
+    const newObjb = Object.assign({}, obj);
+    for (const key in encode) {
+        const fn = encode[key];
+        const value = typeof fn === 'function' ? fn(obj) : obj[fn];
+        newObjb[key] = value;
+    }
+    return Object.assign({}, newObjb);
+}
 
 ;// CONCATENATED MODULE: ./src/core/chart.ts
 
@@ -87,7 +96,8 @@ const OPTIONS = {
  * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
 class Chart {
-    constructor({ container, data, options }) {
+    constructor({ type = 'point', container, data, options }) {
+        this.data = [];
         this.dataTransfer = {
             offset: { x: 0, y: 0 },
             scale: 1,
@@ -101,11 +111,19 @@ class Chart {
         this.nearestItemToMouse = null;
         this.container = container;
         this.options = Object.assign(Object.assign({}, OPTIONS), options);
-        this.data = data.map((d, i) => (Object.assign(Object.assign({}, d), { value: d[this.options.axisY], date: new Date(d.date), label: `Item ${i}` })));
-        console.log(this.data);
-        this.init();
+        this.data = data.map((dato) => {
+            if (this.options.encode) {
+                const { encode } = this.options;
+                return encoder(dato, encode);
+            }
+            return dato;
+        });
+        this.setCanvas();
+        this.setData();
+        this.draw();
+        this.addEventListeners();
     }
-    init() {
+    setCanvas() {
         const box = this.container.getBoundingClientRect();
         const scale = window.devicePixelRatio || 1;
         this.canvas = this.canvas || document.createElement('canvas');
@@ -120,6 +138,8 @@ class Chart {
         };
         this.context.scale(scale, scale);
         this.container.appendChild(this.canvas);
+    }
+    setData() {
         this.dataTransfer = {
             offset: { x: 0, y: 0 },
             scale: 1,
@@ -133,11 +153,11 @@ class Chart {
         this.dataBounds = this.getDataBounds();
         this.defaultDataBounds = Object.assign({}, this.dataBounds);
         this.pixelBounds = this.getPixelBounds();
-        this.draw();
-        this.addEventListeners();
     }
     resize() {
-        this.init();
+        this.setCanvas();
+        this.setData();
+        this.draw();
     }
     getPixelBounds() {
         const bounds = {
@@ -149,8 +169,8 @@ class Chart {
         return bounds;
     }
     getDataBounds() {
-        const x = this.data.map((d) => d.date);
-        const y = this.data.map((d) => d.value);
+        const x = this.data.map((d) => d.x);
+        const y = this.data.map((d) => d.y);
         const minX = Math.min(...x);
         const maxX = Math.max(...x);
         const minY = Math.min(...y);
@@ -177,14 +197,13 @@ class Chart {
         // this.drawThresholdLine(-0.5, 'red')
     }
     emphasize(item) {
-        const { context, data, dataBounds, pixelBounds } = this;
+        const { context, dataBounds, pixelBounds } = this;
         const p = remapPoint(dataBounds, pixelBounds, {
-            x: item.date,
-            y: item.value,
+            x: item.x,
+            y: item.y,
         });
         /** @todo scale the point */
         this.drawPoint(context, p, `rgba(62, 166, 255, 1)`, 12);
-        // this.drawData(data)
     }
     drawData(data) {
         const { context, dataBounds, pixelBounds, dataRange } = this;
@@ -200,10 +219,10 @@ class Chart {
              * @note el cálculo del color se debería hacer en el mapeo inicial de los datos.
              **/
             const point = remapPoint(dataBounds, pixelBounds, {
-                x: item.date,
-                y: item.value,
+                x: item.x,
+                y: item.y,
             });
-            const opacity = (item.value - min) / range;
+            const opacity = (item.y - min) / range;
             const normalize = Math.max(0.1, Math.min(1, opacity));
             this.drawPoint(context, point, `rgba(62, 166, 255, ${normalize})`);
         }
@@ -360,7 +379,7 @@ class Chart {
 }
 
 ;// CONCATENATED MODULE: ./src/data/dataLine.ts
-const data = [
+const dataLine = [
     {
         division: 'Bethesda-Rockville-Frederick, MD Met Div',
         date: '2000-01-01T00:00:00.000Z',
@@ -37712,7 +37731,7 @@ const data = [
         unemployment: 7,
     },
 ];
-/* harmony default export */ const dataLine = (data);
+/* harmony default export */ const data_dataLine = (dataLine);
 
 ;// CONCATENATED MODULE: ./src/index.ts
 /**
@@ -37720,14 +37739,21 @@ const data = [
  * Javascript sobre los diez años anteriores a su entrenamiento.
  */
 
-// import data from './data/dataPlot'
 
-// console.table(data);
+// Parse dataPlot
+// const data = dataPlot.map(dato => ({
+//   value: dato.value,
+//   date: new Date(dato.date),
+// }))
+// Parse dataLine
+const data = data_dataLine;
+const encode = { x: (d) => new Date(d.date), y: 'unemployment' };
 const container = document.querySelector('#chart');
 const options = {
     axisX: 'date',
-    axisY: 'unemployment'
+    axisY: 'unemployment',
+    encode,
 };
-const chart = new Chart({ container, data: dataLine, options });
+const chart = new Chart({ container, data, options });
 window.addEventListener('resize', () => chart.resize(), false);
 

@@ -4,15 +4,24 @@
  */
 
 import Chart from './core/chart'
-// import data from './data/dataPlot'
-import data from './data/dataLine'
+import dataPlot from './data/dataPlot'
+import dataLine from './data/dataLine'
 
-// console.table(data);
+// Parse dataPlot
+// const data = dataPlot.map(dato => ({
+//   value: dato.value,
+//   date: new Date(dato.date),
+// }))
+
+// Parse dataLine
+const data = dataLine
+const encode = { x: (d) => new Date(d.date), y: 'unemployment' }
 
 const container = document.querySelector('#chart') as HTMLElement
 const options: any = {
   axisX: 'date',
-  axisY: 'unemployment'
+  axisY: 'unemployment',
+  encode,
 }
 const chart = new Chart({ container, data, options })
 

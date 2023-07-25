@@ -1,4 +1,4 @@
-const data = [
+const dataPlot = [
   {
     "date": "1880-01-01T00:00:00.000Z",
     "value": -0.3
@@ -6578,4 +6578,4 @@ const data = [
 ]
 
 
-export default data
+export default dataPlot

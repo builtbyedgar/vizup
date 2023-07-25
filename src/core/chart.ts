@@ -2,6 +2,7 @@ import {
   add,
   distance,
   drawText,
+  encoder,
   getNearestIndex,
   lerp,
   remapPoint,
@@ -29,8 +30,8 @@ const OPTIONS: ChartOptions = {
  *
  * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
-export default class Chart {
-  data: any[]
+export default class Chart<T> {
+  data: any[] = []
   container: HTMLElement
   canvas: HTMLCanvasElement
   context: CanvasRenderingContext2D
@@ -53,22 +54,26 @@ export default class Chart {
   }
   nearestItemToMouse: any = null
 
-  constructor({ container, data, options }: ChartProps) {
+  constructor({ type = 'point', container, data, options }: ChartProps<T>) {
     this.container = container
     this.options = { ...OPTIONS, ...options }
-    this.data = data.map((d: any, i: number) => ({
-      ...d,
-      value: d[this.options.axisY],
-      date: new Date(d.date),
-      label: `Item ${i}`,
-    }))
-    console.log(this.data);
-    
 
-    this.init()
+    this.data = data.map((dato) => {
+      if (this.options.encode) {
+        const { encode } = this.options
+        return encoder(dato, encode)
+      }
+
+      return dato
+    })
+
+    this.setCanvas()
+    this.setData()
+    this.draw()
+    this.addEventListeners()
   }
 
-  init() {
+  setCanvas(): void {
     const box = this.container.getBoundingClientRect()
     const scale = window.devicePixelRatio || 1
 
@@ -88,7 +93,9 @@ export default class Chart {
     this.context.scale(scale, scale)
 
     this.container.appendChild(this.canvas)
+  }
 
+  setData() {
     this.dataTransfer = {
       offset: { x: 0, y: 0 },
       scale: 1,
@@ -103,13 +110,12 @@ export default class Chart {
     this.dataBounds = this.getDataBounds()
     this.defaultDataBounds = { ...this.dataBounds }
     this.pixelBounds = this.getPixelBounds()
-
-    this.draw()
-    this.addEventListeners()
   }
 
   resize(): void {
-    this.init()
+    this.setCanvas()
+    this.setData()
+    this.draw()
   }
 
   getPixelBounds(): Bounds {
@@ -124,8 +130,8 @@ export default class Chart {
   }
 
   getDataBounds(): Bounds {
-    const x = this.data.map((d) => d.date)
-    const y = this.data.map((d) => d.value)
+    const x = this.data.map((d) => d.x)
+    const y = this.data.map((d) => d.y)
     const minX = Math.min(...x)
     const maxX = Math.max(...x)
     const minY = Math.min(...y)
@@ -160,15 +166,14 @@ export default class Chart {
   }
 
   emphasize(item: any): void {
-    const { context, data, dataBounds, pixelBounds } = this
+    const { context, dataBounds, pixelBounds } = this
     const p = remapPoint(dataBounds, pixelBounds, {
-      x: item.date,
-      y: item.value,
+      x: item.x,
+      y: item.y,
     })
 
     /** @todo scale the point */
     this.drawPoint(context, p, `rgba(62, 166, 255, 1)`, 12)
-    // this.drawData(data)
   }
 
   drawData(data: any): void {
@@ -186,11 +191,11 @@ export default class Chart {
        * @note el cálculo del color se debería hacer en el mapeo inicial de los datos.
        **/
       const point: Point = remapPoint(dataBounds, pixelBounds, {
-        x: item.date,
-        y: item.value,
+        x: item.x,
+        y: item.y,
       })
 
-      const opacity = (item.value - min) / range
+      const opacity = (item.y - min) / range
       const normalize = Math.max(0.1, Math.min(1, opacity))
       this.drawPoint(context, point, `rgba(62, 166, 255, ${normalize})`)
     }

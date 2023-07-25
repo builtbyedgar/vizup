@@ -1,4 +1,4 @@
-const data = [
+const dataLine = [
   {
     division: 'Bethesda-Rockville-Frederick, MD Met Div',
     date: '2000-01-01T00:00:00.000Z',
@@ -37351,4 +37351,4 @@ const data = [
   },
 ]
 
-export default data
+export default dataLine
