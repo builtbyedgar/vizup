@@ -5,8 +5,6 @@ import {
   getNearestIndex,
   lerp,
   remapPoint,
-  scale,
-  substract,
 } from '../utils/utils'
 
 const CIRCLE = Math.PI * 2
@@ -14,12 +12,8 @@ const CIRCLE_SIZE = 6
 
 const OPTIONS: ChartOptions = {
   margin: { top: 20, left: 40, bottom: 20, right: 40 },
-  axisX: {
-    label: 'data',
-  },
-  axisY: {
-    label: 'value',
-  },
+  axisX: 'data',
+  axisY: 'value',
 }
 
 /**
@@ -31,6 +25,7 @@ const OPTIONS: ChartOptions = {
  * Utilizando diferentes capas y una estrategia de optimización adecuada podemos mejorar
  * bastante el performance. Cuando pintamos muchos elementos (1644) con opacidad (L202),
  * el drag va bastante fino, hay que probar con datasets mas grandes.
+ * 👀 Cuando pintamos 7470 elementos el mouseover se pilla!
  *
  * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
@@ -58,18 +53,17 @@ export default class Chart {
   }
   nearestItemToMouse: any = null
 
-  constructor(
-    container: HTMLElement,
-    data: any,
-    options: ChartOptions = OPTIONS
-  ) {
+  constructor({ container, data, options }: ChartProps) {
     this.container = container
+    this.options = { ...OPTIONS, ...options }
     this.data = data.map((d: any, i: number) => ({
       ...d,
+      value: d[this.options.axisY],
       date: new Date(d.date),
       label: `Item ${i}`,
     }))
-    this.options = options
+    console.log(this.data);
+    
 
     this.init()
   }

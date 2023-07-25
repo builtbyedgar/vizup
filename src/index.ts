@@ -4,11 +4,16 @@
  */
 
 import Chart from './core/chart'
-import data from './data/data'
+// import data from './data/dataPlot'
+import data from './data/dataLine'
 
 // console.table(data);
 
-const container = document.querySelector('#chart') as HTMLElement;
-const chart = new Chart(container, data)
+const container = document.querySelector('#chart') as HTMLElement
+const options: any = {
+  axisX: 'date',
+  axisY: 'unemployment'
+}
+const chart = new Chart({ container, data, options })
 
 window.addEventListener('resize', () => chart.resize(), false)

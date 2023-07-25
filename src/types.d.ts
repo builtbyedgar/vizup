@@ -31,15 +31,27 @@ type ChartDataInfo = {
   dragging: boolean
 }
 
-type ChartOptions = {
-  margin?: Bounds
-  axisX?: any
-  axisY?: any
+type DataRange = {
+  min: number
+  max: number
 }
 
-type DataRange = {
-  min: number, 
-  max: number
+/**
+ * @todo
+ * Si aquí le pasamos `DataRange` se pueden mapear los datos desde fuera del chart
+ * */
+type EncoderMethod = (key: string) => any
+
+type ChartOptions<T = undefined> = {
+  margin?: Bounds
+  axisX?: keyof T | string
+  axisY?: keyof T | string
+}
+
+type ChartProps<T = unknown> = {
+  container: HTMLElement
+  data: T[]
+  options?: ChartOptions
 }
 
 /**
