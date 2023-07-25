@@ -78,7 +78,16 @@ const OPTIONS = {
     },
 };
 /**
+ * @refs
  * https://www.youtube.com/watch?v=n8uCt1TSGKE&t=4743s
+ *
+ *
+ * @note
+ * Utilizando diferentes capas y una estrategia de optimización adecuada podemos mejorar
+ * bastante el performance. Cuando pintamos muchos elementos (1644) con opacidad (L202),
+ * el drag va bastante fino, hay que probar con datasets mas grandes.
+ *
+ * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
 class Chart {
     constructor(container, data, options = OPTIONS) {
@@ -161,10 +170,10 @@ class Chart {
         const { canvasSize, context, data, nearestItemToMouse } = this;
         context.clearRect(0, 0, canvasSize.width, canvasSize.height);
         this.drawData(data);
-        this.drawAxes();
         if (nearestItemToMouse) {
             this.emphasize(nearestItemToMouse);
         }
+        this.drawAxes();
         // this.drawThresholdLine(0, 'green')
         // this.drawThresholdLine(1, 'orange')
         // this.drawThresholdLine(-0.5, 'red')
@@ -218,32 +227,47 @@ class Chart {
      *
      */
     drawAxes() {
+        const { canvasSize, context, options, pixelBounds } = this;
         const position = {
-            x: this.canvasSize.width / 2,
-            y: this.pixelBounds.bottom + 12,
+            x: canvasSize.width / 2,
+            y: pixelBounds.bottom + 12,
         };
-        this.context.save();
+        // context.clearRect(0, 0, canvasSize.width, options.margin.top)
+        // context.clearRect(0, 0, options.margin.left, canvasSize.height)
+        // context.clearRect(
+        //   0,
+        //   canvasSize.height - options.margin.bottom,
+        //   canvasSize.width,
+        //   options.margin.bottom
+        // )
+        // context.clearRect(
+        //   canvasSize.width - options.margin.right,
+        //   0,
+        //   options.margin.right,
+        //   canvasSize.height
+        // )
         drawText({
-            context: this.context,
+            context: context,
             text: 'Value',
             point: position,
             size: 12,
         });
-        this.context.restore();
+        context.save();
         // Draw the axis X line
-        this.context.beginPath();
-        this.context.moveTo(this.pixelBounds.left, this.pixelBounds.bottom);
-        this.context.lineTo(this.pixelBounds.right, this.pixelBounds.bottom);
-        this.context.lineWidth = 1;
-        this.context.strokeStyle = 'lightgrey';
-        this.context.stroke();
+        context.beginPath();
+        context.moveTo(pixelBounds.left, pixelBounds.bottom);
+        context.lineTo(pixelBounds.right, pixelBounds.bottom);
+        context.lineWidth = 1;
+        context.strokeStyle = 'rgb(245, 245, 245)';
+        context.stroke();
+        context.restore();
         // Draw the axis Y line
-        // this.context.beginPath()
-        // this.context.moveTo(this.pixelBounds.left, this.pixelBounds.top)
-        // this.context.lineTo(this.pixelBounds.left, this.pixelBounds.bottom)
-        // this.context.lineWidth = 1
-        // this.context.strokeStyle = 'lightgrey'
-        // this.context.stroke()
+        // context.beginPath()
+        // context.moveTo(pixelBounds.left, pixelBounds.top)
+        // context.lineTo(pixelBounds.left, pixelBounds.bottom)
+        // context.lineWidth = 1
+        // context.strokeStyle = 'lightgrey'
+        // context.stroke()
     }
     drawThresholdLine(value = 0, color = 'darkgrey') {
         const { context, dataBounds, dataRange, pixelBounds } = this;
@@ -261,20 +285,21 @@ class Chart {
     }
     addEventListeners() {
         const { canvas, data, dataBounds, dataInfo, dataTransfer, pixelBounds } = this;
-        canvas.addEventListener('mousedown', (event) => {
-            const dataLocation = this.getMouse(event, true);
-            dataInfo.start = dataLocation;
-            dataInfo.dragging = true;
-        });
+        /** @todo esto hay que pensalo bien */
+        // canvas.addEventListener('mousedown', (event: MouseEvent) => {
+        //   const dataLocation: Point = this.getMouse(event, true)
+        //   dataInfo.start = dataLocation
+        //   dataInfo.dragging = true
+        // })
         canvas.addEventListener('mousemove', (event) => {
-            if (dataInfo.dragging) {
-                const dataLocation = this.getMouse(event, true);
-                dataInfo.end = dataLocation;
-                const offset = substract(dataInfo.start, dataInfo.end);
-                dataInfo.offset = scale(offset, dataTransfer.scale);
-                const newOffset = add(dataTransfer.offset, dataInfo.offset);
-                this.updateDataBounce(newOffset, dataTransfer.scale);
-            }
+            // if (dataInfo.dragging) {
+            //   const dataLocation: Point = this.getMouse(event, true)
+            //   dataInfo.end = dataLocation
+            //   const offset = substract(dataInfo.start, dataInfo.end)
+            //   dataInfo.offset = scale(offset, dataTransfer.scale)
+            //   const newOffset = add(dataTransfer.offset, dataInfo.offset)
+            //   this.updateDataBounce(newOffset, dataTransfer.scale)
+            // }
             const pLocation = this.getMouse(event);
             const point = remapPoint(dataBounds, pixelBounds, pLocation);
             const points = data.map((item) => remapPoint(dataBounds, pixelBounds, { x: item.date, y: item.value }));
@@ -291,17 +316,20 @@ class Chart {
         canvas.addEventListener('mouseup', (event) => {
             dataTransfer.offset = add(dataTransfer.offset, dataInfo.offset);
             dataInfo.dragging = false;
+            dataInfo.end = { x: 0, y: 0 };
+            dataInfo.offset = { x: 0, y: 0 };
         });
-        canvas.addEventListener('wheel', (event) => {
-            event.preventDefault();
-            const dir = Math.sign(event.deltaY);
-            const step = 0.02;
-            dataTransfer.scale += dir * step;
-            // Limitamos el zoom
-            dataTransfer.scale = Math.max(step, Math.min(4, dataTransfer.scale));
-            this.updateDataBounce(dataTransfer.offset, dataTransfer.scale);
-            this.draw();
-        });
+        /** @todo esto hay que pensalo bien */
+        // canvas.addEventListener('wheel', (event: WheelEvent) => {
+        //   event.preventDefault()
+        //   const dir = Math.sign(event.deltaY)
+        //   const step = 0.02
+        //   dataTransfer.scale += dir * step
+        //   /** @note  Limitamos el zoom */
+        //   dataTransfer.scale = Math.max(step, Math.min(2, dataTransfer.scale))
+        //   this.updateDataBounce(dataTransfer.offset, dataTransfer.scale)
+        //   this.draw()
+        // })
     }
     updateDataBounce(offset, scale) {
         const { dataBounds, defaultDataBounds } = this;
@@ -333,7 +361,7 @@ class Chart {
     }
 }
 
-;// CONCATENATED MODULE: ./src/data.ts
+;// CONCATENATED MODULE: ./src/data/data.ts
 const data = [
     {
         "date": "1880-01-01T00:00:00.000Z",
@@ -6912,7 +6940,7 @@ const data = [
         "value": 0.81
     }
 ];
-/* harmony default export */ const src_data = (data);
+/* harmony default export */ const data_data = (data);
 
 ;// CONCATENATED MODULE: ./src/index.ts
 /**
@@ -6923,6 +6951,6 @@ const data = [
 
 // console.table(data);
 const container = document.querySelector('#chart');
-const chart = new Chart(container, src_data);
+const chart = new Chart(container, data_data);
 window.addEventListener('resize', () => chart.resize(), false);
 

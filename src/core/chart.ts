@@ -4,7 +4,6 @@ import {
   drawText,
   getNearestIndex,
   lerp,
-  remap,
   remapPoint,
   scale,
   substract,
@@ -24,7 +23,16 @@ const OPTIONS: ChartOptions = {
 }
 
 /**
+ * @refs
  * https://www.youtube.com/watch?v=n8uCt1TSGKE&t=4743s
+ *
+ *
+ * @note
+ * Utilizando diferentes capas y una estrategia de optimización adecuada podemos mejorar
+ * bastante el performance. Cuando pintamos muchos elementos (1644) con opacidad (L202),
+ * el drag va bastante fino, hay que probar con datasets mas grandes.
+ *
+ * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
 export default class Chart {
   data: any[]
@@ -146,11 +154,12 @@ export default class Chart {
     context.clearRect(0, 0, canvasSize.width, canvasSize.height)
 
     this.drawData(data)
-    this.drawAxes()
 
     if (nearestItemToMouse) {
       this.emphasize(nearestItemToMouse)
     }
+
+    this.drawAxes()
     // this.drawThresholdLine(0, 'green')
     // this.drawThresholdLine(1, 'orange')
     // this.drawThresholdLine(-0.5, 'red')
@@ -216,37 +225,52 @@ export default class Chart {
    *
    */
   drawAxes(): void {
+    const { canvasSize, context, options, pixelBounds } = this
     const position: Point = {
-      x: this.canvasSize.width / 2,
-      y: this.pixelBounds.bottom + 12,
+      x: canvasSize.width / 2,
+      y: pixelBounds.bottom + 12,
     }
 
-    this.context.save()
+    // context.clearRect(0, 0, canvasSize.width, options.margin.top)
+    // context.clearRect(0, 0, options.margin.left, canvasSize.height)
+    // context.clearRect(
+    //   0,
+    //   canvasSize.height - options.margin.bottom,
+    //   canvasSize.width,
+    //   options.margin.bottom
+    // )
+    // context.clearRect(
+    //   canvasSize.width - options.margin.right,
+    //   0,
+    //   options.margin.right,
+    //   canvasSize.height
+    // )
 
     drawText({
-      context: this.context,
+      context: context,
       text: 'Value',
       point: position,
       size: 12,
     })
 
-    this.context.restore()
+    context.save()
 
     // Draw the axis X line
-    this.context.beginPath()
-    this.context.moveTo(this.pixelBounds.left, this.pixelBounds.bottom)
-    this.context.lineTo(this.pixelBounds.right, this.pixelBounds.bottom)
-    this.context.lineWidth = 1
-    this.context.strokeStyle = 'lightgrey'
-    this.context.stroke()
+    context.beginPath()
+    context.moveTo(pixelBounds.left, pixelBounds.bottom)
+    context.lineTo(pixelBounds.right, pixelBounds.bottom)
+    context.lineWidth = 1
+    context.strokeStyle = 'rgb(245, 245, 245)'
+    context.stroke()
 
+    context.restore()
     // Draw the axis Y line
-    // this.context.beginPath()
-    // this.context.moveTo(this.pixelBounds.left, this.pixelBounds.top)
-    // this.context.lineTo(this.pixelBounds.left, this.pixelBounds.bottom)
-    // this.context.lineWidth = 1
-    // this.context.strokeStyle = 'lightgrey'
-    // this.context.stroke()
+    // context.beginPath()
+    // context.moveTo(pixelBounds.left, pixelBounds.top)
+    // context.lineTo(pixelBounds.left, pixelBounds.bottom)
+    // context.lineWidth = 1
+    // context.strokeStyle = 'lightgrey'
+    // context.stroke()
   }
 
   drawThresholdLine(value: number = 0, color: string = 'darkgrey'): void {
@@ -269,22 +293,23 @@ export default class Chart {
     const { canvas, data, dataBounds, dataInfo, dataTransfer, pixelBounds } =
       this
 
-    canvas.addEventListener('mousedown', (event: MouseEvent) => {
-      const dataLocation: Point = this.getMouse(event, true)
-      dataInfo.start = dataLocation
-      dataInfo.dragging = true
-    })
+    /** @todo esto hay que pensalo bien */
+    // canvas.addEventListener('mousedown', (event: MouseEvent) => {
+    //   const dataLocation: Point = this.getMouse(event, true)
+    //   dataInfo.start = dataLocation
+    //   dataInfo.dragging = true
+    // })
 
     canvas.addEventListener('mousemove', (event: MouseEvent) => {
-      if (dataInfo.dragging) {
-        const dataLocation: Point = this.getMouse(event, true)
-        dataInfo.end = dataLocation
-        const offset = substract(dataInfo.start, dataInfo.end)
-        dataInfo.offset = scale(offset, dataTransfer.scale)
-        const newOffset = add(dataTransfer.offset, dataInfo.offset)
+      // if (dataInfo.dragging) {
+      //   const dataLocation: Point = this.getMouse(event, true)
+      //   dataInfo.end = dataLocation
+      //   const offset = substract(dataInfo.start, dataInfo.end)
+      //   dataInfo.offset = scale(offset, dataTransfer.scale)
+      //   const newOffset = add(dataTransfer.offset, dataInfo.offset)
 
-        this.updateDataBounce(newOffset, dataTransfer.scale)
-      }
+      //   this.updateDataBounce(newOffset, dataTransfer.scale)
+      // }
 
       const pLocation = this.getMouse(event)
       const point = remapPoint(dataBounds, pixelBounds, pLocation)
@@ -306,21 +331,23 @@ export default class Chart {
     canvas.addEventListener('mouseup', (event: MouseEvent) => {
       dataTransfer.offset = add(dataTransfer.offset, dataInfo.offset)
       dataInfo.dragging = false
+      dataInfo.end = { x: 0, y: 0 }
+      dataInfo.offset = { x: 0, y: 0 }
     })
 
-    canvas.addEventListener('wheel', (event: WheelEvent) => {
-      event.preventDefault()
-      const dir = Math.sign(event.deltaY)
-      const step = 0.02
+    /** @todo esto hay que pensalo bien */
+    // canvas.addEventListener('wheel', (event: WheelEvent) => {
+    //   event.preventDefault()
+    //   const dir = Math.sign(event.deltaY)
+    //   const step = 0.02
 
-      dataTransfer.scale += dir * step
-      // Limitamos el zoom
-      dataTransfer.scale = Math.max(step, Math.min(4, dataTransfer.scale))
+    //   dataTransfer.scale += dir * step
+    //   /** @note  Limitamos el zoom */
+    //   dataTransfer.scale = Math.max(step, Math.min(2, dataTransfer.scale))
 
-      this.updateDataBounce(dataTransfer.offset, dataTransfer.scale)
-
-      this.draw()
-    })
+    //   this.updateDataBounce(dataTransfer.offset, dataTransfer.scale)
+    //   this.draw()
+    // })
   }
 
   updateDataBounce(offset: Point, scale: number): void {
