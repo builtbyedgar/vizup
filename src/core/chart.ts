@@ -1,6 +1,17 @@
-import { drawText, remap } from '../utils/utils'
+import {
+  add,
+  distance,
+  drawText,
+  getNearestIndex,
+  lerp,
+  remap,
+  remapPoint,
+  scale,
+  substract,
+} from '../utils/utils'
 
 const CIRCLE = Math.PI * 2
+const CIRCLE_SIZE = 6
 
 const OPTIONS: ChartOptions = {
   margin: { top: 20, left: 40, bottom: 20, right: 40 },
@@ -16,7 +27,7 @@ const OPTIONS: ChartOptions = {
  * https://www.youtube.com/watch?v=n8uCt1TSGKE&t=4743s
  */
 export default class Chart {
-  data: any
+  data: any[]
   container: HTMLElement
   canvas: HTMLCanvasElement
   context: CanvasRenderingContext2D
@@ -24,8 +35,20 @@ export default class Chart {
   canvasSize: Size
 
   dataBounds: Bounds
+  defaultDataBounds: Bounds
   pixelBounds: Bounds
   dataRange: DataRange
+  dataTransfer: ChartDataTransfer = {
+    offset: { x: 0, y: 0 },
+    scale: 1,
+  }
+  dataInfo: ChartDataInfo = {
+    start: { x: 0, y: 0 },
+    end: { x: 0, y: 0 },
+    offset: { x: 0, y: 0 },
+    dragging: false,
+  }
+  nearestItemToMouse: any = null
 
   constructor(
     container: HTMLElement,
@@ -33,7 +56,11 @@ export default class Chart {
     options: ChartOptions = OPTIONS
   ) {
     this.container = container
-    this.data = data.map((d) => ({ ...d, date: new Date(d.date) }))
+    this.data = data.map((d: any, i: number) => ({
+      ...d,
+      date: new Date(d.date),
+      label: `Item ${i}`,
+    }))
     this.options = options
 
     this.init()
@@ -60,14 +87,26 @@ export default class Chart {
 
     this.container.appendChild(this.canvas)
 
+    this.dataTransfer = {
+      offset: { x: 0, y: 0 },
+      scale: 1,
+    }
+    this.dataInfo = {
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 0 },
+      offset: { x: 0, y: 0 },
+      dragging: false,
+    }
+
     this.dataBounds = this.getDataBounds()
+    this.defaultDataBounds = { ...this.dataBounds }
     this.pixelBounds = this.getPixelBounds()
 
     this.draw()
+    this.addEventListeners()
   }
 
   resize(): void {
-    console.log('RESIZE')
     this.init()
   }
 
@@ -103,21 +142,34 @@ export default class Chart {
   }
 
   draw(): void {
-    const { canvasSize, context } = this
-    // Limpiamos el canvas
-    this.context.globalAlpha = 0.5
+    const { canvasSize, context, data, nearestItemToMouse } = this
     context.clearRect(0, 0, canvasSize.width, canvasSize.height)
-    this.context.globalAlpha = 1
 
-    this.drawData()
+    this.drawData(data)
     this.drawAxes()
-    this.drawThresholdLine(0, 'green')
-    this.drawThresholdLine(1, 'orange')
-    this.drawThresholdLine(-0.5, 'red')
+
+    if (nearestItemToMouse) {
+      this.emphasize(nearestItemToMouse)
+    }
+    // this.drawThresholdLine(0, 'green')
+    // this.drawThresholdLine(1, 'orange')
+    // this.drawThresholdLine(-0.5, 'red')
   }
 
-  drawData(): void {
-    const { context, data, dataBounds, pixelBounds, dataRange } = this
+  emphasize(item: any): void {
+    const { context, data, dataBounds, pixelBounds } = this
+    const p = remapPoint(dataBounds, pixelBounds, {
+      x: item.date,
+      y: item.value,
+    })
+
+    /** @todo scale the point */
+    this.drawPoint(context, p, `rgba(62, 166, 255, 1)`, 12)
+    // this.drawData(data)
+  }
+
+  drawData(data: any): void {
+    const { context, dataBounds, pixelBounds, dataRange } = this
     const { min, max } = dataRange
     const range = (min - max) * -1
 
@@ -126,24 +178,14 @@ export default class Chart {
        * @todo esto se puede sacar a una función
        *
        * @note como vemos le sumamos/restamos la mitad del tamaño de los circulos para que
-       * queden dentro. Esto hay que pensarlo bien
+       * queden dentro. Esto hay que pensarlo bien.
+       *
+       * @note el cálculo del color se debería hacer en el mapeo inicial de los datos.
        **/
-      const point: Point = {
-        x: remap(
-          dataBounds.left,
-          dataBounds.right,
-          pixelBounds.left + 4,
-          pixelBounds.right - 4,
-          item.date
-        ),
-        y: remap(
-          dataBounds.top,
-          dataBounds.bottom,
-          pixelBounds.top + 4,
-          pixelBounds.bottom - 4,
-          item.value
-        ),
-      }
+      const point: Point = remapPoint(dataBounds, pixelBounds, {
+        x: item.date,
+        y: item.value,
+      })
 
       const opacity = (item.value - min) / range
       const normalize = Math.max(0.1, Math.min(1, opacity))
@@ -160,7 +202,7 @@ export default class Chart {
     context: CanvasRenderingContext2D,
     point: Point,
     color: string = 'black',
-    size: number = 6
+    size: number = CIRCLE_SIZE
   ): void {
     context.beginPath()
     context.fillStyle = color
@@ -171,7 +213,7 @@ export default class Chart {
   }
 
   /**
-   * 
+   *
    */
   drawAxes(): void {
     const position: Point = {
@@ -180,7 +222,7 @@ export default class Chart {
     }
 
     this.context.save()
-    
+
     drawText({
       context: this.context,
       text: 'Value',
@@ -208,17 +250,111 @@ export default class Chart {
   }
 
   drawThresholdLine(value: number = 0, color: string = 'darkgrey'): void {
-    const height = this.pixelBounds.bottom - this.pixelBounds.top
-    const range = (this.dataRange.min - this.dataRange.max) * -1
+    const { context, dataBounds, dataRange, pixelBounds } = this
+    const height = pixelBounds.bottom - pixelBounds.top
+    const range = (dataRange.min - dataRange.max) * -1
     const escalaY = height / range
-    const zero = this.dataBounds.top + height - ((value - this.dataRange.min) * escalaY)
-    
-     // Draw the axis X line
-     this.context.beginPath()
-     this.context.moveTo(this.pixelBounds.left, zero)
-     this.context.lineTo(this.pixelBounds.right, zero)
-     this.context.lineWidth = 1
-     this.context.strokeStyle = color
-     this.context.stroke()
+    const zero = dataBounds.top + height - (value - dataRange.min) * escalaY
+
+    // Draw the axis X line
+    context.beginPath()
+    context.moveTo(pixelBounds.left, zero)
+    context.lineTo(pixelBounds.right, zero)
+    context.lineWidth = 1
+    context.strokeStyle = color
+    context.stroke()
+  }
+
+  addEventListeners(): void {
+    const { canvas, data, dataBounds, dataInfo, dataTransfer, pixelBounds } =
+      this
+
+    canvas.addEventListener('mousedown', (event: MouseEvent) => {
+      const dataLocation: Point = this.getMouse(event, true)
+      dataInfo.start = dataLocation
+      dataInfo.dragging = true
+    })
+
+    canvas.addEventListener('mousemove', (event: MouseEvent) => {
+      if (dataInfo.dragging) {
+        const dataLocation: Point = this.getMouse(event, true)
+        dataInfo.end = dataLocation
+        const offset = substract(dataInfo.start, dataInfo.end)
+        dataInfo.offset = scale(offset, dataTransfer.scale)
+        const newOffset = add(dataTransfer.offset, dataInfo.offset)
+
+        this.updateDataBounce(newOffset, dataTransfer.scale)
+      }
+
+      const pLocation = this.getMouse(event)
+      const point = remapPoint(dataBounds, pixelBounds, pLocation)
+      const points = data.map((item) =>
+        remapPoint(dataBounds, pixelBounds, { x: item.date, y: item.value })
+      )
+      const index = getNearestIndex(point, points)
+      const dist = distance(points[index], point)
+
+      if (dist < CIRCLE_SIZE) {
+        this.nearestItemToMouse = data[index]
+      } else {
+        this.nearestItemToMouse = null
+      }
+
+      this.draw()
+    })
+
+    canvas.addEventListener('mouseup', (event: MouseEvent) => {
+      dataTransfer.offset = add(dataTransfer.offset, dataInfo.offset)
+      dataInfo.dragging = false
+    })
+
+    canvas.addEventListener('wheel', (event: WheelEvent) => {
+      event.preventDefault()
+      const dir = Math.sign(event.deltaY)
+      const step = 0.02
+
+      dataTransfer.scale += dir * step
+      // Limitamos el zoom
+      dataTransfer.scale = Math.max(step, Math.min(4, dataTransfer.scale))
+
+      this.updateDataBounce(dataTransfer.offset, dataTransfer.scale)
+
+      this.draw()
+    })
+  }
+
+  updateDataBounce(offset: Point, scale: number): void {
+    const { dataBounds, defaultDataBounds } = this
+
+    dataBounds.left = defaultDataBounds.left + offset.x
+    dataBounds.right = defaultDataBounds.right + offset.x
+    dataBounds.top = defaultDataBounds.top + offset.y
+    dataBounds.bottom = defaultDataBounds.bottom + offset.y
+
+    const center: Point = {
+      x: (dataBounds.left + dataBounds.right) * 0.5,
+      y: (dataBounds.top + dataBounds.bottom) * 0.5,
+    }
+    dataBounds.left = lerp(center.x, dataBounds.left, scale)
+    dataBounds.right = lerp(center.x, dataBounds.right, scale)
+    dataBounds.top = lerp(center.y, dataBounds.top, scale)
+    dataBounds.bottom = lerp(center.y, dataBounds.bottom, scale)
+  }
+
+  getMouse(event: MouseEvent, dataSpace: boolean = true): Point {
+    const { canvas, defaultDataBounds, pixelBounds } = this
+    const box = canvas.getBoundingClientRect()
+
+    /** @question restamos los margenes? */
+    const location: Point = {
+      x: event.clientX - box.left,
+      y: event.clientY - box.top,
+    }
+
+    if (dataSpace === true) {
+      return remapPoint(pixelBounds, defaultDataBounds, location)
+    }
+
+    return location
   }
 }

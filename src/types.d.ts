@@ -19,6 +19,18 @@ type Bounds = {
   left: number
 }
 
+type ChartDataTransfer = {
+  offset: Point
+  scale: number
+}
+
+type ChartDataInfo = {
+  start: Point
+  end: Point
+  offset: Point
+  dragging: boolean
+}
+
 type ChartOptions = {
   margin?: Bounds
   axisX?: any

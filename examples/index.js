@@ -15,6 +15,12 @@ function lerpInv(a, b, percent) {
 function remap(oldA, oldB, newA, newB, value) {
     return lerp(newA, newB, lerpInv(oldA, oldB, value));
 }
+function remapPoint(oldBounds, newBounds, point) {
+    return {
+        x: remap(oldBounds.left, oldBounds.right, newBounds.left, newBounds.right, point.x),
+        y: remap(oldBounds.top, oldBounds.bottom, newBounds.top, newBounds.bottom, point.y),
+    };
+}
 function drawText({ context, text, point, align = 'center', verticalAlign = 'middle', size = 10, color = 'black', }) {
     context.textAlign = align;
     context.textBaseline = verticalAlign;
@@ -22,10 +28,46 @@ function drawText({ context, text, point, align = 'center', verticalAlign = 'mid
     context.fillStyle = color;
     context.fillText(text, point.x, point.y);
 }
+function add(p1, p2) {
+    return {
+        x: p1.x + p2.x,
+        y: p1.y + p2.y,
+    };
+}
+function substract(p1, p2) {
+    return {
+        x: p1.x - p2.x,
+        y: p1.y - p2.y,
+    };
+}
+function scale(p, factor) {
+    return {
+        x: p.x * factor,
+        y: p.y * factor,
+    };
+}
+function distance(p1, p2) {
+    return Math.sqrt(Math.pow((p1.x - p2.x), 2) + Math.pow((p1.y - p2.y), 2));
+}
+function getNearestIndex(location, points) {
+    const len = points.length;
+    let min = Number.MAX_SAFE_INTEGER;
+    let index = 0;
+    for (let i = 0; i < len; i++) {
+        const point = points[i];
+        const dist = distance(location, point);
+        if (dist < min) {
+            min = dist;
+            index = i;
+        }
+    }
+    return index;
+}
 
 ;// CONCATENATED MODULE: ./src/core/chart.ts
 
 const CIRCLE = Math.PI * 2;
+const CIRCLE_SIZE = 6;
 const OPTIONS = {
     margin: { top: 20, left: 40, bottom: 20, right: 40 },
     axisX: {
@@ -40,8 +82,19 @@ const OPTIONS = {
  */
 class Chart {
     constructor(container, data, options = OPTIONS) {
+        this.dataTransfer = {
+            offset: { x: 0, y: 0 },
+            scale: 1,
+        };
+        this.dataInfo = {
+            start: { x: 0, y: 0 },
+            end: { x: 0, y: 0 },
+            offset: { x: 0, y: 0 },
+            dragging: false,
+        };
+        this.nearestItemToMouse = null;
         this.container = container;
-        this.data = data.map((d) => (Object.assign(Object.assign({}, d), { date: new Date(d.date) })));
+        this.data = data.map((d, i) => (Object.assign(Object.assign({}, d), { date: new Date(d.date), label: `Item ${i}` })));
         this.options = options;
         this.init();
     }
@@ -60,12 +113,23 @@ class Chart {
         };
         this.context.scale(scale, scale);
         this.container.appendChild(this.canvas);
+        this.dataTransfer = {
+            offset: { x: 0, y: 0 },
+            scale: 1,
+        };
+        this.dataInfo = {
+            start: { x: 0, y: 0 },
+            end: { x: 0, y: 0 },
+            offset: { x: 0, y: 0 },
+            dragging: false,
+        };
         this.dataBounds = this.getDataBounds();
+        this.defaultDataBounds = Object.assign({}, this.dataBounds);
         this.pixelBounds = this.getPixelBounds();
         this.draw();
+        this.addEventListeners();
     }
     resize() {
-        console.log('RESIZE');
         this.init();
     }
     getPixelBounds() {
@@ -94,19 +158,29 @@ class Chart {
         return bounds;
     }
     draw() {
-        const { canvasSize, context } = this;
-        // Limpiamos el canvas
-        this.context.globalAlpha = 0.5;
+        const { canvasSize, context, data, nearestItemToMouse } = this;
         context.clearRect(0, 0, canvasSize.width, canvasSize.height);
-        this.context.globalAlpha = 1;
-        this.drawData();
+        this.drawData(data);
         this.drawAxes();
-        this.drawThresholdLine(0, 'green');
-        this.drawThresholdLine(1, 'orange');
-        this.drawThresholdLine(-0.5, 'red');
+        if (nearestItemToMouse) {
+            this.emphasize(nearestItemToMouse);
+        }
+        // this.drawThresholdLine(0, 'green')
+        // this.drawThresholdLine(1, 'orange')
+        // this.drawThresholdLine(-0.5, 'red')
     }
-    drawData() {
-        const { context, data, dataBounds, pixelBounds, dataRange } = this;
+    emphasize(item) {
+        const { context, data, dataBounds, pixelBounds } = this;
+        const p = remapPoint(dataBounds, pixelBounds, {
+            x: item.date,
+            y: item.value,
+        });
+        /** @todo scale the point */
+        this.drawPoint(context, p, `rgba(62, 166, 255, 1)`, 12);
+        // this.drawData(data)
+    }
+    drawData(data) {
+        const { context, dataBounds, pixelBounds, dataRange } = this;
         const { min, max } = dataRange;
         const range = (min - max) * -1;
         for (const item of data) {
@@ -114,12 +188,14 @@ class Chart {
              * @todo esto se puede sacar a una función
              *
              * @note como vemos le sumamos/restamos la mitad del tamaño de los circulos para que
-             * queden dentro. Esto hay que pensarlo bien
+             * queden dentro. Esto hay que pensarlo bien.
+             *
+             * @note el cálculo del color se debería hacer en el mapeo inicial de los datos.
              **/
-            const point = {
-                x: remap(dataBounds.left, dataBounds.right, pixelBounds.left + 4, pixelBounds.right - 4, item.date),
-                y: remap(dataBounds.top, dataBounds.bottom, pixelBounds.top + 4, pixelBounds.bottom - 4, item.value),
-            };
+            const point = remapPoint(dataBounds, pixelBounds, {
+                x: item.date,
+                y: item.value,
+            });
             const opacity = (item.value - min) / range;
             const normalize = Math.max(0.1, Math.min(1, opacity));
             this.drawPoint(context, point, `rgba(62, 166, 255, ${normalize})`);
@@ -130,7 +206,7 @@ class Chart {
      *
      * Esto debería ser una clase Primitives/Circle
      */
-    drawPoint(context, point, color = 'black', size = 6) {
+    drawPoint(context, point, color = 'black', size = CIRCLE_SIZE) {
         context.beginPath();
         context.fillStyle = color;
         context.strokeStyle = 'rgba(0, 0, 0, 0.4)';
@@ -170,17 +246,90 @@ class Chart {
         // this.context.stroke()
     }
     drawThresholdLine(value = 0, color = 'darkgrey') {
-        const height = this.pixelBounds.bottom - this.pixelBounds.top;
-        const range = (this.dataRange.min - this.dataRange.max) * -1;
+        const { context, dataBounds, dataRange, pixelBounds } = this;
+        const height = pixelBounds.bottom - pixelBounds.top;
+        const range = (dataRange.min - dataRange.max) * -1;
         const escalaY = height / range;
-        const zero = this.dataBounds.top + height - ((value - this.dataRange.min) * escalaY);
+        const zero = dataBounds.top + height - (value - dataRange.min) * escalaY;
         // Draw the axis X line
-        this.context.beginPath();
-        this.context.moveTo(this.pixelBounds.left, zero);
-        this.context.lineTo(this.pixelBounds.right, zero);
-        this.context.lineWidth = 1;
-        this.context.strokeStyle = color;
-        this.context.stroke();
+        context.beginPath();
+        context.moveTo(pixelBounds.left, zero);
+        context.lineTo(pixelBounds.right, zero);
+        context.lineWidth = 1;
+        context.strokeStyle = color;
+        context.stroke();
+    }
+    addEventListeners() {
+        const { canvas, data, dataBounds, dataInfo, dataTransfer, pixelBounds } = this;
+        canvas.addEventListener('mousedown', (event) => {
+            const dataLocation = this.getMouse(event, true);
+            dataInfo.start = dataLocation;
+            dataInfo.dragging = true;
+        });
+        canvas.addEventListener('mousemove', (event) => {
+            if (dataInfo.dragging) {
+                const dataLocation = this.getMouse(event, true);
+                dataInfo.end = dataLocation;
+                const offset = substract(dataInfo.start, dataInfo.end);
+                dataInfo.offset = scale(offset, dataTransfer.scale);
+                const newOffset = add(dataTransfer.offset, dataInfo.offset);
+                this.updateDataBounce(newOffset, dataTransfer.scale);
+            }
+            const pLocation = this.getMouse(event);
+            const point = remapPoint(dataBounds, pixelBounds, pLocation);
+            const points = data.map((item) => remapPoint(dataBounds, pixelBounds, { x: item.date, y: item.value }));
+            const index = getNearestIndex(point, points);
+            const dist = distance(points[index], point);
+            if (dist < CIRCLE_SIZE) {
+                this.nearestItemToMouse = data[index];
+            }
+            else {
+                this.nearestItemToMouse = null;
+            }
+            this.draw();
+        });
+        canvas.addEventListener('mouseup', (event) => {
+            dataTransfer.offset = add(dataTransfer.offset, dataInfo.offset);
+            dataInfo.dragging = false;
+        });
+        canvas.addEventListener('wheel', (event) => {
+            event.preventDefault();
+            const dir = Math.sign(event.deltaY);
+            const step = 0.02;
+            dataTransfer.scale += dir * step;
+            // Limitamos el zoom
+            dataTransfer.scale = Math.max(step, Math.min(4, dataTransfer.scale));
+            this.updateDataBounce(dataTransfer.offset, dataTransfer.scale);
+            this.draw();
+        });
+    }
+    updateDataBounce(offset, scale) {
+        const { dataBounds, defaultDataBounds } = this;
+        dataBounds.left = defaultDataBounds.left + offset.x;
+        dataBounds.right = defaultDataBounds.right + offset.x;
+        dataBounds.top = defaultDataBounds.top + offset.y;
+        dataBounds.bottom = defaultDataBounds.bottom + offset.y;
+        const center = {
+            x: (dataBounds.left + dataBounds.right) * 0.5,
+            y: (dataBounds.top + dataBounds.bottom) * 0.5,
+        };
+        dataBounds.left = lerp(center.x, dataBounds.left, scale);
+        dataBounds.right = lerp(center.x, dataBounds.right, scale);
+        dataBounds.top = lerp(center.y, dataBounds.top, scale);
+        dataBounds.bottom = lerp(center.y, dataBounds.bottom, scale);
+    }
+    getMouse(event, dataSpace = true) {
+        const { canvas, defaultDataBounds, pixelBounds } = this;
+        const box = canvas.getBoundingClientRect();
+        /** @question restamos los margenes? */
+        const location = {
+            x: event.clientX - box.left,
+            y: event.clientY - box.top,
+        };
+        if (dataSpace === true) {
+            return remapPoint(pixelBounds, defaultDataBounds, location);
+        }
+        return location;
     }
 }
 
