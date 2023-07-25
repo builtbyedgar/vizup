@@ -313,7 +313,7 @@ export default class Chart<T> {
       const pLocation = this.getMouse(event)
       const point = remapPoint(dataBounds, pixelBounds, pLocation)
       const points = data.map((item) =>
-        remapPoint(dataBounds, pixelBounds, { x: item.date, y: item.value })
+        remapPoint(dataBounds, pixelBounds, { x: item.x, y: item.y })
       )
       const index = getNearestIndex(point, points)
       const dist = distance(points[index], point)
