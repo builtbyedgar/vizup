@@ -4,7 +4,7 @@
  */
 
 import Chart from './core/chart'
-import data from './data'
+import data from './data/data'
 
 // console.table(data);
 
