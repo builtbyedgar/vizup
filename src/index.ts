@@ -7,18 +7,12 @@ import Chart from './core/chart'
 import dataPlot from './data/dataPlot'
 import dataLine from './data/dataLine'
 
-// Parse dataPlot
-// const data = dataPlot.map(dato => ({
-//   value: dato.value,
-//   date: new Date(dato.date),
-// }))
-
-// Parse dataLine
 const data = dataPlot
-const encode = { x: (d) => new Date(d.date), y: 'value' }
+// const encode: Encode = { x: (d) => new Date(d.date), y: 'unemployment' }  // dataLine
+const encode = { x: (d) => new Date(d.date), y: 'value' } // dataPlot
 
 const container = document.querySelector('#chart') as HTMLElement
-const options: any = {
+const options: ChartOptions = {
   axisX: 'date',
   axisY: 'unemployment',
   encode,

@@ -376,6 +376,9 @@ class Chart {
         }
         return location;
     }
+    destroy() {
+        /** @todo */
+    }
 }
 
 ;// CONCATENATED MODULE: ./src/data/dataPlot.ts
@@ -6966,14 +6969,9 @@ const dataPlot = [
  */
 
 
-// Parse dataPlot
-// const data = dataPlot.map(dato => ({
-//   value: dato.value,
-//   date: new Date(dato.date),
-// }))
-// Parse dataLine
 const data = data_dataPlot;
-const encode = { x: (d) => new Date(d.date), y: 'value' };
+// const encode: Encode = { x: (d) => new Date(d.date), y: 'unemployment' }  // dataLine
+const encode = { x: (d) => new Date(d.date), y: 'value' }; // dataPlot
 const container = document.querySelector('#chart');
 const options = {
     axisX: 'date',

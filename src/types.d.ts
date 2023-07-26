@@ -46,21 +46,25 @@ type ChartData = {
   // y1?: string | number
 }
 
-type Primitive = number | string | boolean | Date
+type Primitive = number | string | boolean | Date | Function
 
 type MaybeArray<T> = T | T[]
+
+type DynamicObject = {
+  [key: string]: Primitive
+}
 
 /**
  * @todo
  * Si aquí le pasamos `DataRange` se pueden mapear los datos desde fuera del chart
  * */
 type EncodeFunction = (
-  data: Record<string, MaybeArray<Primitive>>[]
-) => MaybeArray<Primitive>[]
+  data: Record<string, DynamicObject>[]
+) => DynamicObject
 
 // type EncodeTypes = 'constant' | 'field' | 'transform' | 'column'
 
-type Encode = MaybeArray<EncodeFunction>
+type Encode = DynamicObject | EncodeFunction
 
 type ChartType = 'point' | 'line'
 

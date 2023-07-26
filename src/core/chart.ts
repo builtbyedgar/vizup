@@ -383,4 +383,8 @@ export default class Chart<T> {
 
     return location
   }
+
+  destroy(): void {
+    /** @todo */
+  }
 }
