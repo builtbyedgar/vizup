@@ -18,5 +18,4 @@ const options: ChartOptions = {
   encode,
 }
 const chart = new Chart({ container, data, options })
-
-window.addEventListener('resize', () => chart.resize(), false)
+console.log(chart)

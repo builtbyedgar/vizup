@@ -58,9 +58,7 @@ type DynamicObject = {
  * @todo
  * Si aquí le pasamos `DataRange` se pueden mapear los datos desde fuera del chart
  * */
-type EncodeFunction = (
-  data: Record<string, DynamicObject>[]
-) => DynamicObject
+type EncodeFunction = (data: Record<string, DynamicObject>[]) => DynamicObject
 
 // type EncodeTypes = 'constant' | 'field' | 'transform' | 'column'
 
@@ -95,3 +93,27 @@ type DrawTextArgs = {
   size?: number
   color?: string
 }
+
+/**
+ * Geometries
+*/
+
+type ArcProps = {
+  context: CanvasRenderingContext2D
+  x: number
+  y: number
+  r: number
+  start: number
+  end: number
+  color?: string
+  border?: string
+  opacity?: number
+  emphasis?: {
+    r?: number
+    color?: string
+    border?: string
+    opacity?: number
+  }
+}
+
+type CircleProps = Omit<ArcProps, 'start' | 'end'>

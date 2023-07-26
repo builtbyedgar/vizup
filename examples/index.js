@@ -5,6 +5,77 @@
 /************************************************************************/
 var __webpack_exports__ = {};
 
+;// CONCATENATED MODULE: ./src/geoms/arc.ts
+class Arc {
+    constructor({ context, x, y, r, start, end, color, border, opacity = 1, emphasis }) {
+        this.x = 0;
+        this.y = 0;
+        this.r = 0;
+        this.start = 0;
+        this.end = 0;
+        this.color = 'rgba(0, 0, 0, 0)';
+        this.border = '#000000';
+        this.context = context;
+        this.x = x;
+        this.y = y;
+        this.r = r;
+        this.start = start;
+        this.end = end;
+        this.color = color;
+        this.border = border;
+        this.opacity = opacity;
+        this.emphasis = emphasis;
+    }
+    draw() {
+        const { context, x, y, r, start, end, color, border } = this;
+        context.beginPath();
+        context.arc(x, y, r, start, end, false);
+        context.fillStyle = color;
+        context.strokeStyle = border;
+        context.fill();
+        context.stroke();
+        context.closePath();
+    }
+    emphasize() {
+        const { context, x, y, r, start, end, color, border, emphasis } = this;
+        context.beginPath();
+        context.arc(x, y, emphasis.r || r, start, end, false);
+        context.fillStyle = emphasis.color || color;
+        context.strokeStyle = emphasis.border || border;
+        context.fill();
+        context.stroke();
+        context.closePath();
+    }
+    unemphasize() {
+        this.draw();
+    }
+}
+
+;// CONCATENATED MODULE: ./src/geoms/circle.ts
+
+class Circle extends Arc {
+    constructor({ context, x, y, r, color, border, emphasis }) {
+        super({ context, x, y, r, start: 0, end: Math.PI * 2, color, border, emphasis });
+    }
+    draw() {
+        super.draw();
+    }
+}
+
+;// CONCATENATED MODULE: ./src/utils/data.ts
+function encode(obj, encode) {
+    const newObjb = Object.assign({}, obj);
+    for (const key in encode) {
+        const fn = encode[key];
+        const value = typeof fn === 'function' ? fn(obj) : obj[fn];
+        newObjb[key] = value;
+    }
+    return Object.assign({}, newObjb);
+}
+function encodeData(data, encoders) {
+    return data.map((dato) => encode(dato, encoders));
+}
+
 ;// CONCATENATED MODULE: ./src/utils/utils.ts
 function lerp(a, b, percent) {
     return a + (b - a) * percent;
@@ -63,19 +134,62 @@ function getNearestIndex(location, points) {
     }
     return index;
 }
-function encoder(obj, encode) {
-    const newObjb = Object.assign({}, obj);
-    for (const key in encode) {
-        const fn = encode[key];
-        const value = typeof fn === 'function' ? fn(obj) : obj[fn];
-        newObjb[key] = value;
+function interpolateColor(c0, c1, f) {
+    const color0 = c0.match(/.{1,2}/g).map((oct) => parseInt(oct, 16) * (1 - f));
+    const color1 = c1.match(/.{1,2}/g).map((oct) => parseInt(oct, 16) * f);
+    let ci = [0, 1, 2].map((i) => Math.min(Math.round(color0[i] + color1[i]), 255));
+    return (ci
+        .reduce((a, v) => (a << 8) + v, 0)
+        .toString(16)
+        // @ts-ignore
+        .padStart(6, '0'));
+}
+function debounce(func, timeout) {
+    var timeoutID, timeout = timeout || 200;
+    return function () {
+        var scope = this, args = arguments;
+        clearTimeout(timeoutID);
+        timeoutID = setTimeout(function () {
+            func.apply(scope, Array.prototype.slice.call(args));
+        }, timeout);
+    };
+}
+
+;// CONCATENATED MODULE: ./src/core/canvas.ts
+class Canvas {
+    constructor(container) {
+        this.container = container;
+        this.canvas = this.canvas || document.createElement('canvas');
+        this.context = this.context || this.canvas.getContext('2d');
+        this.resize();
+        this.container.appendChild(this.canvas);
     }
-    return Object.assign({}, newObjb);
+    resize() {
+        const { width, height } = this.container.getBoundingClientRect();
+        const scale = window.devicePixelRatio || 1;
+        this.canvas.style.width = width + 'px';
+        this.canvas.style.height = height + 'px';
+        this.canvas.width = width * scale;
+        this.canvas.height = height * scale;
+        this.size = { width: width, height: height };
+        this.context.scale(scale, scale);
+        return this.size;
+    }
+    getCanvas() {
+        return this.canvas;
+    }
+    getContext() {
+        return this.context;
+    }
+    getSize() {
+        return this.size;
+    }
 }
 
 ;// CONCATENATED MODULE: ./src/core/chart.ts
 
-const CIRCLE = Math.PI * 2;
+
+
 const CIRCLE_SIZE = 6;
 const OPTIONS = {
     margin: { top: 20, left: 40, bottom: 20, right: 40 },
@@ -98,66 +212,31 @@ const OPTIONS = {
 class Chart {
     constructor({ type = 'point', container, data, options }) {
         this.data = [];
-        this.dataTransfer = {
-            offset: { x: 0, y: 0 },
-            scale: 1,
-        };
-        this.dataInfo = {
-            start: { x: 0, y: 0 },
-            end: { x: 0, y: 0 },
-            offset: { x: 0, y: 0 },
-            dragging: false,
-        };
+        this.elements = [];
         this.nearestItemToMouse = null;
+        this.prevNearestItemToMouse = null;
+        this.canvas = new Canvas(container);
+        this.canvasElement = this.canvas.canvas;
+        this.context = this.canvas.context;
+        this.canvasSize = this.canvas.size;
         this.container = container;
         this.options = Object.assign(Object.assign({}, OPTIONS), options);
-        this.data = data.map((dato) => {
-            if (this.options.encode) {
-                const { encode } = this.options;
-                return encoder(dato, encode);
-            }
-            return dato;
-        });
-        this.setCanvas();
-        this.setData();
-        this.draw();
+        this.data = this.options.encode
+            ? encodeData(data, this.options.encode)
+            : data;
+        this.render();
         this.addEventListeners();
     }
-    setCanvas() {
-        const box = this.container.getBoundingClientRect();
-        const scale = window.devicePixelRatio || 1;
-        this.canvas = this.canvas || document.createElement('canvas');
-        this.context = this.context || this.canvas.getContext('2d');
-        this.canvas.style.width = box.width + 'px';
-        this.canvas.style.height = box.height + 'px';
-        this.canvas.width = box.width * scale;
-        this.canvas.height = box.height * scale;
-        this.canvasSize = {
-            width: box.width,
-            height: box.height,
-        };
-        this.context.scale(scale, scale);
-        this.container.appendChild(this.canvas);
+    render() {
+        this.canvasSize = this.canvas.resize();
+        this.setData();
+        this.createElements();
+        this.draw();
     }
     setData() {
-        this.dataTransfer = {
-            offset: { x: 0, y: 0 },
-            scale: 1,
-        };
-        this.dataInfo = {
-            start: { x: 0, y: 0 },
-            end: { x: 0, y: 0 },
-            offset: { x: 0, y: 0 },
-            dragging: false,
-        };
         this.dataBounds = this.getDataBounds();
         this.defaultDataBounds = Object.assign({}, this.dataBounds);
         this.pixelBounds = this.getPixelBounds();
-    }
-    resize() {
-        this.setCanvas();
-        this.setData();
-        this.draw();
     }
     getPixelBounds() {
         const bounds = {
@@ -184,107 +263,77 @@ class Chart {
         };
         return bounds;
     }
-    draw() {
-        const { canvasSize, context, data, nearestItemToMouse } = this;
-        context.clearRect(0, 0, canvasSize.width, canvasSize.height);
-        this.drawData(data);
-        if (nearestItemToMouse) {
-            this.emphasize(nearestItemToMouse);
-        }
-        this.drawAxes();
-        // this.drawThresholdLine(0, 'green')
-        // this.drawThresholdLine(1, 'orange')
-        // this.drawThresholdLine(-0.5, 'red')
-    }
-    emphasize(item) {
-        const { context, dataBounds, pixelBounds } = this;
-        const p = remapPoint(dataBounds, pixelBounds, {
-            x: item.x,
-            y: item.y,
-        });
-        /** @todo scale the point */
-        this.drawPoint(context, p, `rgba(62, 166, 255, 1)`, 12);
-    }
-    drawData(data) {
-        const { context, dataBounds, pixelBounds, dataRange } = this;
+    createElements() {
+        const { context, data, dataBounds, pixelBounds, dataRange } = this;
         const { min, max } = dataRange;
         const range = (min - max) * -1;
+        this.elements = [];
         for (const item of data) {
-            /**
-             * @todo esto se puede sacar a una función
-             *
-             * @note como vemos le sumamos/restamos la mitad del tamaño de los circulos para que
-             * queden dentro. Esto hay que pensarlo bien.
-             *
-             * @note el cálculo del color se debería hacer en el mapeo inicial de los datos.
-             **/
             const point = remapPoint(dataBounds, pixelBounds, {
                 x: item.x,
                 y: item.y,
             });
-            const opacity = (item.y - min) / range;
-            const normalize = Math.max(0.1, Math.min(1, opacity));
-            this.drawPoint(context, point, `rgba(62, 166, 255, ${normalize})`);
+            // const opacity = Math.max(0.1, Math.min(1, q))
+            const q = (item.y - min) / range;
+            const color = interpolateColor('C7E9C0', '2B8CBE', q);
+            const circle = new Circle({
+                context: context,
+                x: point.x,
+                y: point.y,
+                r: 3,
+                color: 'transparent',
+                border: `#${color}`,
+                opacity: 1,
+                emphasis: {
+                    r: 5,
+                    color: `#${color}`,
+                },
+            });
+            this.elements.push(circle);
         }
     }
-    /**
-     * @todo
-     *
-     * Esto debería ser una clase Primitives/Circle
-     */
-    drawPoint(context, point, color = 'black', size = CIRCLE_SIZE) {
-        context.beginPath();
-        context.fillStyle = color;
-        context.strokeStyle = 'rgba(0, 0, 0, 0.4)';
-        context.arc(point.x, point.y, size / 2, 0, CIRCLE);
-        context.fill();
-        context.stroke();
+    draw() {
+        const { canvasSize, context } = this;
+        context.clearRect(0, 0, canvasSize.width, canvasSize.height);
+        this.drawAxes();
+        this.drawElements();
+        // this.drawThresholdLine(0, 'green')
+        // this.drawThresholdLine(1, 'orange')
+        // this.drawThresholdLine(-0.5, 'red')
     }
-    /**
-     *
-     */
+    drawElements() {
+        const { elements } = this;
+        if (this.nearestItemToMouse !== null) {
+            this.prevNearestItemToMouse = this.nearestItemToMouse;
+            const circle = elements[this.nearestItemToMouse];
+            circle.emphasize();
+        }
+        if (this.prevNearestItemToMouse !== null) {
+            const circle = elements[this.prevNearestItemToMouse];
+            circle.unemphasize();
+        }
+        this.prevNearestItemToMouse = null;
+        this.nearestItemToMouse = null;
+        this.elements.forEach((element) => element.draw());
+    }
     drawAxes() {
-        const { canvasSize, context, options, pixelBounds } = this;
+        const { canvasSize, context, pixelBounds } = this;
         const position = {
             x: canvasSize.width / 2,
             y: pixelBounds.bottom + 12,
         };
-        // context.clearRect(0, 0, canvasSize.width, options.margin.top)
-        // context.clearRect(0, 0, options.margin.left, canvasSize.height)
-        // context.clearRect(
-        //   0,
-        //   canvasSize.height - options.margin.bottom,
-        //   canvasSize.width,
-        //   options.margin.bottom
-        // )
-        // context.clearRect(
-        //   canvasSize.width - options.margin.right,
-        //   0,
-        //   options.margin.right,
-        //   canvasSize.height
-        // )
         drawText({
             context: context,
             text: 'Value',
             point: position,
             size: 12,
         });
-        context.save();
-        // Draw the axis X line
         context.beginPath();
         context.moveTo(pixelBounds.left, pixelBounds.bottom);
         context.lineTo(pixelBounds.right, pixelBounds.bottom);
         context.lineWidth = 1;
         context.strokeStyle = 'rgb(245, 245, 245)';
         context.stroke();
-        context.restore();
-        // Draw the axis Y line
-        // context.beginPath()
-        // context.moveTo(pixelBounds.left, pixelBounds.top)
-        // context.lineTo(pixelBounds.left, pixelBounds.bottom)
-        // context.lineWidth = 1
-        // context.strokeStyle = 'lightgrey'
-        // context.stroke()
     }
     drawThresholdLine(value = 0, color = 'darkgrey') {
         const { context, dataBounds, dataRange, pixelBounds } = this;
@@ -292,7 +341,6 @@ class Chart {
         const range = (dataRange.min - dataRange.max) * -1;
         const escalaY = height / range;
         const zero = dataBounds.top + height - (value - dataRange.min) * escalaY;
-        // Draw the axis X line
         context.beginPath();
         context.moveTo(pixelBounds.left, zero);
         context.lineTo(pixelBounds.right, zero);
@@ -301,70 +349,25 @@ class Chart {
         context.stroke();
     }
     addEventListeners() {
-        const { canvas, data, dataBounds, dataInfo, dataTransfer, pixelBounds } = this;
-        /** @todo esto hay que pensalo bien */
-        // canvas.addEventListener('mousedown', (event: MouseEvent) => {
-        //   const dataLocation: Point = this.getMouse(event, true)
-        //   dataInfo.start = dataLocation
-        //   dataInfo.dragging = true
-        // })
+        const { canvasElement: canvas, data, dataBounds, pixelBounds } = this;
+        window.addEventListener('resize', debounce(() => this.render(), 100), false);
         canvas.addEventListener('mousemove', (event) => {
-            // if (dataInfo.dragging) {
-            //   const dataLocation: Point = this.getMouse(event, true)
-            //   dataInfo.end = dataLocation
-            //   const offset = substract(dataInfo.start, dataInfo.end)
-            //   dataInfo.offset = scale(offset, dataTransfer.scale)
-            //   const newOffset = add(dataTransfer.offset, dataInfo.offset)
-            //   this.updateDataBounce(newOffset, dataTransfer.scale)
-            // }
             const pLocation = this.getMouse(event);
             const point = remapPoint(dataBounds, pixelBounds, pLocation);
             const points = data.map((item) => remapPoint(dataBounds, pixelBounds, { x: item.x, y: item.y }));
             const index = getNearestIndex(point, points);
             const dist = distance(points[index], point);
             if (dist < CIRCLE_SIZE) {
-                this.nearestItemToMouse = data[index];
+                this.nearestItemToMouse = index;
             }
             else {
                 this.nearestItemToMouse = null;
             }
             this.draw();
         });
-        canvas.addEventListener('mouseup', (event) => {
-            dataTransfer.offset = add(dataTransfer.offset, dataInfo.offset);
-            dataInfo.dragging = false;
-            dataInfo.end = { x: 0, y: 0 };
-            dataInfo.offset = { x: 0, y: 0 };
-        });
-        /** @todo esto hay que pensalo bien */
-        // canvas.addEventListener('wheel', (event: WheelEvent) => {
-        //   event.preventDefault()
-        //   const dir = Math.sign(event.deltaY)
-        //   const step = 0.02
-        //   dataTransfer.scale += dir * step
-        //   /** @note  Limitamos el zoom */
-        //   dataTransfer.scale = Math.max(step, Math.min(2, dataTransfer.scale))
-        //   this.updateDataBounce(dataTransfer.offset, dataTransfer.scale)
-        //   this.draw()
-        // })
-    }
-    updateDataBounce(offset, scale) {
-        const { dataBounds, defaultDataBounds } = this;
-        dataBounds.left = defaultDataBounds.left + offset.x;
-        dataBounds.right = defaultDataBounds.right + offset.x;
-        dataBounds.top = defaultDataBounds.top + offset.y;
-        dataBounds.bottom = defaultDataBounds.bottom + offset.y;
-        const center = {
-            x: (dataBounds.left + dataBounds.right) * 0.5,
-            y: (dataBounds.top + dataBounds.bottom) * 0.5,
-        };
-        dataBounds.left = lerp(center.x, dataBounds.left, scale);
-        dataBounds.right = lerp(center.x, dataBounds.right, scale);
-        dataBounds.top = lerp(center.y, dataBounds.top, scale);
-        dataBounds.bottom = lerp(center.y, dataBounds.bottom, scale);
     }
     getMouse(event, dataSpace = true) {
-        const { canvas, defaultDataBounds, pixelBounds } = this;
+        const { canvasElement: canvas, defaultDataBounds, pixelBounds } = this;
         const box = canvas.getBoundingClientRect();
         /** @question restamos los margenes? */
         const location = {
@@ -6971,13 +6974,13 @@ const dataPlot = [
 
 const data = data_dataPlot;
 // const encode: Encode = { x: (d) => new Date(d.date), y: 'unemployment' }  // dataLine
-const encode = { x: (d) => new Date(d.date), y: 'value' }; // dataPlot
+const src_encode = { x: (d) => new Date(d.date), y: 'value' }; // dataPlot
 const container = document.querySelector('#chart');
 const options = {
     axisX: 'date',
     axisY: 'unemployment',
-    encode,
+    encode: src_encode,
 };
 const chart = new Chart({ container, data, options });
-window.addEventListener('resize', () => chart.resize(), false);
+console.log(chart);
 

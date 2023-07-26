@@ -98,15 +98,30 @@ export function getNearestIndex(location: Point, points: any[]): number {
   return index
 }
 
-export function encoder<T>(obj: T, encode: Encode): T {
-  const newObjb = { ...obj }
+export function interpolateColor(c0: string, c1: string, f: number): string {
+  const color0 = c0.match(/.{1,2}/g).map((oct) => parseInt(oct, 16) * (1 - f))
+  const color1 = c1.match(/.{1,2}/g).map((oct) => parseInt(oct, 16) * f)
+  let ci = [0, 1, 2].map((i) =>
+    Math.min(Math.round(color0[i] + color1[i]), 255)
+  )
+  return (
+    ci
+      .reduce((a, v) => (a << 8) + v, 0)
+      .toString(16)
+      // @ts-ignore
+      .padStart(6, '0')
+  )
+}
 
-  for (const key in encode) {
-    const fn = encode[key]
-    const value = typeof fn === 'function' ? fn(obj) : obj[fn]
-    newObjb[key] = value
+export function debounce(func, timeout) {
+  var timeoutID,
+    timeout = timeout || 200
+  return function () {
+    var scope = this,
+      args = arguments
+    clearTimeout(timeoutID)
+    timeoutID = setTimeout(function () {
+      func.apply(scope, Array.prototype.slice.call(args))
+    }, timeout)
   }
-
-
-  return { ...newObjb }
 }
