@@ -229,15 +229,21 @@ class Chart {
     }
     render() {
         this.canvasSize = this.canvas.resize();
-        this.setData();
+        this.setBounds();
         this.createElements();
         this.draw();
     }
-    setData() {
+    /**
+     * Handles the bounding boxes calculation
+     */
+    setBounds() {
         this.dataBounds = this.getDataBounds();
         this.defaultDataBounds = Object.assign({}, this.dataBounds);
         this.pixelBounds = this.getPixelBounds();
     }
+    /**
+     * Calculates the available bounding box for the canvas
+     */
     getPixelBounds() {
         const bounds = {
             top: this.options.margin.top,
@@ -247,6 +253,9 @@ class Chart {
         };
         return bounds;
     }
+    /**
+     * Calculates the bounding box relative to the data
+     */
     getDataBounds() {
         const x = this.data.map((d) => d.x);
         const y = this.data.map((d) => d.y);
@@ -263,6 +272,12 @@ class Chart {
         };
         return bounds;
     }
+    /**
+     * Creates the elements that shows the data
+     *
+     * @todo
+     * This need to be something like Factory Pattern?
+     */
     createElements() {
         const { context, data, dataBounds, pixelBounds, dataRange } = this;
         const { min, max } = dataRange;
@@ -292,15 +307,18 @@ class Chart {
             this.elements.push(circle);
         }
     }
+    /**
+     * Handle the draw of all elements that composes the chart and of course, clean the canvas.
+     */
     draw() {
         const { canvasSize, context } = this;
         context.clearRect(0, 0, canvasSize.width, canvasSize.height);
         this.drawAxes();
         this.drawElements();
-        // this.drawThresholdLine(0, 'green')
-        // this.drawThresholdLine(1, 'orange')
-        // this.drawThresholdLine(-0.5, 'red')
     }
+    /**
+     * This method is responsible for handling the drawing of the elements.
+     */
     drawElements() {
         const { elements } = this;
         if (this.nearestItemToMouse !== null) {
@@ -316,6 +334,9 @@ class Chart {
         this.nearestItemToMouse = null;
         this.elements.forEach((element) => element.draw());
     }
+    /**
+     * I don't like axes, I really love grids!
+     */
     drawAxes() {
         const { canvasSize, context, pixelBounds } = this;
         const position = {
@@ -335,6 +356,10 @@ class Chart {
         context.strokeStyle = 'rgb(245, 245, 245)';
         context.stroke();
     }
+    /**
+     * @todo
+     * Move it
+     */
     drawThresholdLine(value = 0, color = 'darkgrey') {
         const { context, dataBounds, dataRange, pixelBounds } = this;
         const height = pixelBounds.bottom - pixelBounds.top;
@@ -348,11 +373,21 @@ class Chart {
         context.strokeStyle = color;
         context.stroke();
     }
+    /**
+     * Event listener management
+     */
     addEventListeners() {
         const { canvasElement: canvas, data, dataBounds, pixelBounds } = this;
         window.addEventListener('resize', debounce(() => this.render(), 100), false);
+        /**
+         * @todo
+         * This isn't efficient. It should be fired every mouse movement and should probably causes
+         * performance issues. A possible solution is to move the nearest element find logic to a
+         * method that is called on requestAnimationFrame and the mousemove event handler only
+         * handle a control variable.
+         */
         canvas.addEventListener('mousemove', (event) => {
-            const pLocation = this.getMouse(event);
+            const pLocation = this.getMousePoint(event);
             const point = remapPoint(dataBounds, pixelBounds, pLocation);
             const points = data.map((item) => remapPoint(dataBounds, pixelBounds, { x: item.x, y: item.y }));
             const index = getNearestIndex(point, points);
@@ -366,7 +401,10 @@ class Chart {
             this.draw();
         });
     }
-    getMouse(event, dataSpace = true) {
+    /**
+     * Get de mouse position relative to the canvas
+     */
+    getMousePoint(event, dataSpace = true) {
         const { canvasElement: canvas, defaultDataBounds, pixelBounds } = this;
         const box = canvas.getBoundingClientRect();
         /** @question restamos los margenes? */
