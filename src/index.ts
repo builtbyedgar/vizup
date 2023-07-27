@@ -13,9 +13,12 @@ const encode = { x: (d) => new Date(d.date), y: 'value' } // dataPlot
 
 const container = document.querySelector('#chart') as HTMLElement
 const options: ChartOptions = {
-  axisX: 'date',
-  axisY: 'unemployment',
+  xAxis: 'date',
+  yAxis: 'unemployment',
   encode,
+  data: {
+    data
+  }
 }
-const chart = new Chart({ container, data, options })
+const chart = new Chart({ container, options })
 console.log(chart)

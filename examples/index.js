@@ -154,6 +154,12 @@ function debounce(func, timeout) {
         }, timeout);
     };
 }
+function radiansToDegrees(radians) {
+    return radians * (180 / Math.PI);
+}
+function degreesToRadians(degrees) {
+    return degrees * (Math.PI / 180);
+}
 
 ;// CONCATENATED MODULE: ./src/core/canvas.ts
 class Canvas {

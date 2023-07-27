@@ -37,7 +37,7 @@ type DataRange = {
 }
 
 // Data to encode
-type ChartData = {
+type ChartEncodedData = {
   x: string | number
   y: string | number
   color?: string
@@ -66,19 +66,26 @@ type Encode = DynamicObject | EncodeFunction
 
 type ChartType = 'point' | 'line'
 
-type ChartOptions<T = undefined> = {
-  margin?: Bounds
-  axisX?: keyof T | string
-  axisY?: keyof T | string
-  encode?: Encode
+type ChartData<T = any> = {
+  type?: ChartType
+  data: T[]
 }
 
-type ChartProps<T> = {
-  container: HTMLElement
-  data: T[]
-  type?: ChartType
-  options?: ChartOptions
+type ChartOptions = {
+  margin?: Bounds
+  xAxis?: string | boolean
+  yAxis?: string | boolean
+  encode?: Encode
+  data: ChartData
 }
+
+type ChartDefaultOptions = Omit<ChartOptions, 'data'>
+
+type ChartProps = {
+  container: HTMLElement
+  options: ChartOptions
+}
+
 
 /**
  * Methods
@@ -117,3 +124,10 @@ type ArcProps = {
 }
 
 type CircleProps = Omit<ArcProps, 'start' | 'end'>
+
+
+type ChartConfig<T> = {
+  elementId: string
+  dataset: T[]
+
+}

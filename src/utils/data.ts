@@ -12,6 +12,6 @@ export function encode<T>(obj: T, encode: Encode): T {
   return { ...newObjb }
 }
 
-export function encodeData<T>(data: T[], encoders: Encode): T[] {
+export function encodeData(data: ChartData[], encoders: Encode): any {
   return data.map((dato) => encode(dato, encoders))
 }

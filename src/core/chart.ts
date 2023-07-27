@@ -12,10 +12,10 @@ import Canvas from './canvas'
 
 const CIRCLE_SIZE = 6
 
-const OPTIONS: ChartOptions = {
+const OPTIONS: ChartDefaultOptions = {
   margin: { top: 20, left: 40, bottom: 20, right: 40 },
-  axisX: 'data',
-  axisY: 'value',
+  xAxis: 'data',
+  yAxis: 'value',
 }
 
 /**
@@ -31,8 +31,8 @@ const OPTIONS: ChartOptions = {
  *
  * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
-export default class Chart<T> {
-  data: any[] = []
+export default class Chart {
+  data: ChartData[] | any[]
   elements: Arc[] | Circle[] = []
   container: HTMLElement
   canvasElement: HTMLCanvasElement
@@ -47,18 +47,21 @@ export default class Chart<T> {
   nearestItemToMouse: any = null
   prevNearestItemToMouse: any = null
 
-  constructor({ type = 'point', container, data, options }: ChartProps<T>) {
+  constructor({ container, options }: ChartProps) {
     this.canvas = new Canvas(container)
     this.canvasElement = this.canvas.canvas
     this.context = this.canvas.context
     this.canvasSize = this.canvas.size
-
     this.container = container
     this.options = { ...OPTIONS, ...options }
 
+    /**
+     * @todo
+     * If data is Array
+     */
     this.data = this.options.encode
-      ? encodeData(data, this.options.encode)
-      : data
+      ? encodeData(this.options.data as any, this.options.encode)
+      : this.options.data
 
     this.render()
     this.addEventListeners()
@@ -119,7 +122,7 @@ export default class Chart<T> {
 
   /**
    * Creates the elements that shows the data
-   * 
+   *
    * @todo
    * This need to be something like Factory Pattern?
    */
@@ -169,7 +172,7 @@ export default class Chart<T> {
   }
 
   /**
-   * This method is responsible for handling the drawing of the elements. 
+   * This method is responsible for handling the drawing of the elements.
    */
   drawElements(): void {
     const { elements } = this
@@ -217,7 +220,7 @@ export default class Chart<T> {
 
   /**
    * @todo
-   * Move it 
+   * Move it
    */
   drawThresholdLine(value: number = 0, color: string = 'darkgrey'): void {
     const { context, dataBounds, dataRange, pixelBounds } = this
@@ -245,11 +248,11 @@ export default class Chart<T> {
       debounce(() => this.render(), 100),
       false
     )
-    
+
     /**
      * @todo
      * This isn't efficient. It should be fired every mouse movement and should probably causes
-     * performance issues. A possible solution is to move the nearest element find logic to a 
+     * performance issues. A possible solution is to move the nearest element find logic to a
      * method that is called on requestAnimationFrame and the mousemove event handler only
      * handle a control variable.
      */
@@ -272,7 +275,6 @@ export default class Chart<T> {
       this.draw()
     })
   }
-
 
   /**
    * Get de mouse position relative to the canvas
