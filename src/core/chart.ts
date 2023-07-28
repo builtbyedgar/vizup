@@ -1,4 +1,4 @@
-import { Arc, Circle } from '../geoms'
+import { Arc, Circle } from '../shapes'
 import {
   debounce,
   encodeData,
