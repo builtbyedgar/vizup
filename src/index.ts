@@ -19,11 +19,11 @@ const options: ChartOptions = {
   // xAxis: 'date',
   // yAxis: 'value',
   datasets: [
-    // {
-    //   type: 'plot',
-    //   data: dataPlot,
-    //   encode: encodePlot,
-    // },
+    {
+      type: 'plot',
+      data: dataPlot,
+      encode: encodePlot,
+    },
     // {
     //   type: 'line',
     //   data: dataLine,
@@ -32,14 +32,14 @@ const options: ChartOptions = {
     //   color: '#2B8CBE',
     //   lineType: 'custom',
     // },
-    {
-      type: 'line',
-      data: dataLine2,
-      encode: encodeLine2,
-      lineWidth: 1,
-      lineType: 'hvh',
-      color: '#2B8CBE'
-    }
+    // {
+    //   type: 'line',
+    //   data: dataLine2,
+    //   encode: encodeLine2,
+    //   lineWidth: 1,
+    //   lineType: 'hvh',
+    //   color: '#2B8CBE'
+    // }
   ]
 }
 const chart = new Chart({ container, options })
