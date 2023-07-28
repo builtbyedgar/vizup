@@ -1,4 +1,6 @@
-export default class Arc {
+import Shape from './shape'
+
+export default class Arc extends Shape {
   context: CanvasRenderingContext2D
   x: number = 0
   y: number = 0
@@ -11,6 +13,7 @@ export default class Arc {
   emphasis: any
 
   constructor({ context, x, y, r, start, end, color, border, opacity = 1, emphasis }: ArcProps) {
+    super(context)
     this.context = context
     this.x = x
     this.y = y

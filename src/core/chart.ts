@@ -1,14 +1,17 @@
 import { Arc, Circle } from '../geoms'
 import {
   debounce,
-  distance,
-  drawText,
   encodeData,
-  getNearestIndex,
-  interpolateColor,
-  remapPoint,
+  remapPoint
 } from '../utils'
 import Canvas from './canvas'
+import { CanvasLayer } from './canvas-layer'
+
+type ChartDataLayer = {
+  type: DatasetShapeType
+  layer: CanvasLayer
+  encode?: Encode
+}
 
 const CIRCLE_SIZE = 6
 
@@ -32,46 +35,95 @@ const OPTIONS: ChartDefaultOptions = {
  * https://developer.ibm.com/tutorials/wa-canvashtml5layering/
  */
 export default class Chart {
-  data: ChartData[] | any[]
+  canvas: Canvas // Here web draw axes and some "static" content
+  dataCanvas: Canvas // Here web draw the data representation
   elements: Arc[] | Circle[] = []
-  container: HTMLElement
   canvasElement: HTMLCanvasElement
   context: CanvasRenderingContext2D
   options: ChartOptions
   canvasSize: Size
-  canvas: Canvas
-  dataBounds: Bounds
-  defaultDataBounds: Bounds
-  pixelBounds: Bounds
-  dataRange: DataRange
   nearestItemToMouse: any = null
   prevNearestItemToMouse: any = null
 
+  /** 💡 NEW APPROACH */
+  /**
+   * Guardamos los datos de todos los datasets para calcular los bounds generales para
+   * el Chart y que utilizaremos para calcular los bounding boxes de las capas y los min/max values
+   **/
+  data: any[]
+  /** Para pintar las diferentes capasas de datos */
+  datasets: ChartDatasetProps[]
+  container: HTMLElement
+  /** Las diferentes capas del Chart */
+  layers: ChartDataLayer[] = []
+  // layersData: ChartDataset[] = []
+  dataRange: DataRange
+  /** Aunque tengamos diferentes datasets han de compartir el mismo */
+  dataBounds: Bounds
+  defaultDataBounds: Bounds
+  /**
+   * @todo
+   * No se si realmente lo necesitamos puesto que cada layer lo tiene
+   * Similar al DataBounds
+   **/
+  pixelBounds: BoundingBox
+  /** Margenes del Canvas */
+  margin: Bounds = {
+    top: 20,
+    right: 30,
+    bottom: 60,
+    left: 100,
+  }
+
   constructor({ container, options }: ChartProps) {
-    this.canvas = new Canvas(container)
-    this.canvasElement = this.canvas.canvas
-    this.context = this.canvas.context
-    this.canvasSize = this.canvas.size
+    this.options = options
+    this.datasets = this.options.datasets
     this.container = container
     this.options = { ...OPTIONS, ...options }
 
-    /**
-     * @todo
-     * If data is Array
-     */
-    this.data = this.options.encode
-      ? encodeData(this.options.data as any, this.options.encode)
-      : this.options.data
+    this.data = this.options.datasets.map((dataset) => {
+      return dataset.encode
+        ? encodeData(dataset.data, dataset.encode)
+        : dataset.data
+    })    
 
     this.render()
     this.addEventListeners()
   }
 
   render(): void {
-    this.canvasSize = this.canvas.resize()
+    for (const { layer } of this.layers) {
+      layer.clear()
+    }
+
+    /**
+     * @performance 👻
+     * Resetar así un Array es mucho más eficiente que `array = []` puesto que de ese
+     * modo estamos creando otro objeto en memoria y dependemos del GC para que lo elimine.
+     */
+    this.layers.length = 0
     this.setBounds()
-    this.createElements()
-    this.draw()
+    this.createCanvasLayers()
+  }
+
+  createCanvasLayers() {
+    for (const index in this.datasets) {
+      const { ...props } = this.datasets[index]
+      const encoded = encodeData(props.data, props.encode)
+      props.data = encoded
+      console.log(encoded);
+      
+      this.layers[index] = {
+        type: props.type,
+        layer: new CanvasLayer(
+          this.container,
+          this.dataBounds,
+          this.pixelBounds,
+          this.margin,
+          props,
+        ),
+      }
+    }
   }
 
   /**
@@ -86,29 +138,31 @@ export default class Chart {
   /**
    * Calculates the available bounding box for the canvas
    */
-  getPixelBounds(): Bounds {
-    const bounds: Bounds = {
-      top: this.options.margin.top,
-      right: this.canvasSize.width - this.options.margin.right,
-      bottom: this.canvasSize.height - this.options.margin.bottom,
-      left: this.options.margin.left,
+  getPixelBounds(): BoundingBox {
+    const rect = this.container.getBoundingClientRect()
+    return {
+      x: rect.x + this.margin.left,
+      y: rect.y + this.margin.top,
+      top: rect.top + this.margin.top,
+      right: rect.right - this.margin.right,
+      bottom: rect.bottom - this.margin.bottom,
+      left: rect.left + this.margin.left,
+      width: rect.width - this.margin.left - this.margin.right,
+      height: rect.height - this.margin.top - this.margin.bottom,
     }
-
-    return bounds
   }
 
   /**
    * Calculates the bounding box relative to the data
    */
-  getDataBounds(): Bounds {
-    const x = this.data.map((d) => d.x)
-    const y = this.data.map((d) => d.y)
+  getDataBounds() {
+    const data = [].concat.apply([], this.data) as ChartEncodedData[]
+    const x = data.map((d) => d.x) as number[]
+    const y = data.map((d) => d.y) as number[]
     const minX = Math.min(...x)
     const maxX = Math.max(...x)
     const minY = Math.min(...y)
     const maxY = Math.max(...y)
-
-    this.dataRange = { min: minY, max: maxY }
 
     const bounds: Bounds = {
       top: maxY,
@@ -121,128 +175,9 @@ export default class Chart {
   }
 
   /**
-   * Creates the elements that shows the data
-   *
-   * @todo
-   * This need to be something like Factory Pattern?
-   */
-  createElements(): void {
-    const { context, data, dataBounds, pixelBounds, dataRange } = this
-    const { min, max } = dataRange
-    const range = (min - max) * -1
-    this.elements = []
-
-    for (const item of data) {
-      const point: Point = remapPoint(dataBounds, pixelBounds, {
-        x: item.x,
-        y: item.y,
-      })
-      // const opacity = Math.max(0.1, Math.min(1, q))
-      const q = (item.y - min) / range
-      const color = interpolateColor('C7E9C0', '2B8CBE', q)
-
-      const circle = new Circle({
-        context: context,
-        x: point.x,
-        y: point.y,
-        r: 3,
-        color: 'transparent',
-        border: `#${color}`,
-        opacity: 1,
-        emphasis: {
-          r: 5,
-          color: `#${color}`,
-        },
-      })
-
-      this.elements.push(circle)
-    }
-  }
-
-  /**
-   * Handle the draw of all elements that composes the chart and of course, clean the canvas.
-   */
-  draw(): void {
-    const { canvasSize, context } = this
-
-    context.clearRect(0, 0, canvasSize.width, canvasSize.height)
-
-    this.drawAxes()
-    this.drawElements()
-  }
-
-  /**
-   * This method is responsible for handling the drawing of the elements.
-   */
-  drawElements(): void {
-    const { elements } = this
-
-    if (this.nearestItemToMouse !== null) {
-      this.prevNearestItemToMouse = this.nearestItemToMouse
-      const circle = elements[this.nearestItemToMouse] as Circle
-      circle.emphasize()
-    }
-
-    if (this.prevNearestItemToMouse !== null) {
-      const circle = elements[this.prevNearestItemToMouse] as Circle
-      circle.unemphasize()
-    }
-    this.prevNearestItemToMouse = null
-    this.nearestItemToMouse = null
-
-    this.elements.forEach((element) => element.draw())
-  }
-
-  /**
-   * I don't like axes, I really love grids!
-   */
-  drawAxes(): void {
-    const { canvasSize, context, pixelBounds } = this
-    const position: Point = {
-      x: canvasSize.width / 2,
-      y: pixelBounds.bottom + 12,
-    }
-
-    drawText({
-      context: context,
-      text: 'Value',
-      point: position,
-      size: 12,
-    })
-
-    context.beginPath()
-    context.moveTo(pixelBounds.left, pixelBounds.bottom)
-    context.lineTo(pixelBounds.right, pixelBounds.bottom)
-    context.lineWidth = 1
-    context.strokeStyle = 'rgb(245, 245, 245)'
-    context.stroke()
-  }
-
-  /**
-   * @todo
-   * Move it
-   */
-  drawThresholdLine(value: number = 0, color: string = 'darkgrey'): void {
-    const { context, dataBounds, dataRange, pixelBounds } = this
-    const height = pixelBounds.bottom - pixelBounds.top
-    const range = (dataRange.min - dataRange.max) * -1
-    const escalaY = height / range
-    const zero = dataBounds.top + height - (value - dataRange.min) * escalaY
-
-    context.beginPath()
-    context.moveTo(pixelBounds.left, zero)
-    context.lineTo(pixelBounds.right, zero)
-    context.lineWidth = 1
-    context.strokeStyle = color
-    context.stroke()
-  }
-
-  /**
    * Event listener management
    */
   addEventListeners(): void {
-    const { canvasElement: canvas, data, dataBounds, pixelBounds } = this
-
     window.addEventListener(
       'resize',
       debounce(() => this.render(), 100),
@@ -256,24 +191,24 @@ export default class Chart {
      * method that is called on requestAnimationFrame and the mousemove event handler only
      * handle a control variable.
      */
-    canvas.addEventListener('mousemove', (event: MouseEvent) => {
-      const pLocation = this.getMousePoint(event)
-      const point = remapPoint(dataBounds, pixelBounds, pLocation)
-      const points = data.map((item) =>
-        remapPoint(dataBounds, pixelBounds, { x: item.x, y: item.y })
-      )
+    // canvas.addEventListener('mousemove', (event: MouseEvent) => {
+    //   const pLocation = this.getMousePoint(event)
+    //   const point = remapPoint(dataBounds, pixelBounds, pLocation)
+    //   const points = data.map((item) =>
+    //     remapPoint(dataBounds, pixelBounds, { x: item.x, y: item.y })
+    //   )
 
-      const index = getNearestIndex(point, points)
-      const dist = distance(points[index], point)
+    //   const index = getNearestIndex(point, points)
+    //   const dist = distance(points[index], point)
 
-      if (dist < CIRCLE_SIZE) {
-        this.nearestItemToMouse = index
-      } else {
-        this.nearestItemToMouse = null
-      }
+    //   if (dist < CIRCLE_SIZE) {
+    //     this.nearestItemToMouse = index
+    //   } else {
+    //     this.nearestItemToMouse = null
+    //   }
 
-      this.draw()
-    })
+    //   // this.draw()
+    // })
   }
 
   /**

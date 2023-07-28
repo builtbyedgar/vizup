@@ -21,17 +21,24 @@
       h1 {
         font-size: 5rem;
       }
+
+      #chart {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        background-color: white;
+      }
+      canvas {
+        position: absolute;
+      }
     </style>
   </head>
   <body>
     <!-- <h1>Hello charts</h1> -->
-    <div
-      id="chart"
-      style="width: 100%; height: 600px; background-color: white"
-    ></div>
+    <div id="chart"></div>
 
     <script type="module" src="./index.js"></script>
-    
+
     <script>
       javascript: (function () {
         var script = document.createElement('script')

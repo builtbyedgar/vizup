@@ -1,4 +1,3 @@
-
 export function encode<T>(obj: T, encode: Encode): T {
   const newObjb = { ...obj }
 
@@ -12,6 +11,6 @@ export function encode<T>(obj: T, encode: Encode): T {
   return { ...newObjb }
 }
 
-export function encodeData(data: ChartData[], encoders: Encode): any {
+export function encodeData(data: ChartDatasetProps[], encoders: Encode): any {
   return data.map((dato) => encode(dato, encoders))
 }
